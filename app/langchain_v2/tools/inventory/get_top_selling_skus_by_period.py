@@ -1,12 +1,11 @@
 import os
 from langchain.tools import tool
-from supabase import create_client, Client
 from collections import defaultdict
 from app.langchain_v2.utils.date_parser import parse_period_input
+from app.utils.supabase_client import get_supabase_client
 
-SUPABASE_URL = os.getenv("SUPABASE_URL")
-SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
-supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+
+supabase = get_supabase_client()
 
 
 @tool

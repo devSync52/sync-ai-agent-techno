@@ -11,19 +11,19 @@ from langchain_openai import ChatOpenAI
 from datetime import datetime, timezone
 import logging
 import re
+import os
 
 
 # 🔥 Logging
 logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger("sync-ai")
-
+logger = logging.getLogger("sync-ai-agent")
 
 # 🚀 FastAPI App
 app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["*"],  # dominio
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -44,29 +44,34 @@ class AgentRequest(BaseModel):
     user_type: str
 
 
-# 🚀 Endpoints
+# 🚀 Endpoint principal do Chat
 @app.post("/chat")
 async def chat_with_agent(request: AgentRequest):
     if not is_valid_uuid(request.session_id):
-        raise HTTPException(status_code=400, detail="Invalid session_id")
+        raise HTTPException(status_code=400, detail="❌ Invalid session_id")
 
-    logger.info(f"[Chat] Session: {request.session_id} | Q: {request.question}")
+    logger.info(f"[Chat] Session: {request.session_id} | Question: {request.question}")
 
-    # 🔥 LLM
-    model = ChatOpenAI(
-        model_name="gpt-3.5-turbo-0125",
-        temperature=0,
-        streaming=True,
-    )
+    try:
+        # 🔥 LLM
+        model = ChatOpenAI(
+            model_name="gpt-3.5-turbo-0125",
+            temperature=0,
+            streaming=True,
+        )
 
-    # 🔥 Cria agente + memória
-    agent, chat_history = await createSyncGuardianAgent(
-        model=model,
-        account_id=request.account_id,
-        user_id=request.user_id,
-        session_id=request.session_id,
-        user_type=request.user_type,
-    )
+        # 🔥 Cria agente + memória
+        agent, chat_history = await createSyncGuardianAgent(
+            model=model,
+            account_id=request.account_id,
+            user_id=request.user_id,
+            session_id=request.session_id,
+            user_type=request.user_type,
+        )
+
+    except Exception as e:
+        logger.error(f"❌ Error creating agent: {e}")
+        raise HTTPException(status_code=500, detail="Failed to create AI agent")
 
     # 🔥 Streaming response
     async def stream_response():
@@ -78,10 +83,10 @@ async def chat_with_agent(request: AgentRequest):
             }):
                 if isinstance(chunk, str):
                     final_answer += chunk
-                    yield chunk + "\n"
+                    yield chunk
                 elif "output" in chunk:
                     final_answer += chunk["output"]
-                    yield chunk["output"] + "\n"
+                    yield chunk["output"]
 
         except Exception as e:
             logger.error(f"❌ Error in stream: {e}")
@@ -91,26 +96,27 @@ async def chat_with_agent(request: AgentRequest):
         try:
             timestamp = datetime.now(timezone.utc).isoformat()
 
-            if request.question:
+            # 🟦 Mensagem do usuário
+            if request.question.strip():
                 supabase.table("ai_chat_logs").insert({
                     "session_id": request.session_id,
                     "user_id": request.user_id,
-                    "account_id": request.account_id, 
+                    "account_id": request.account_id,
                     "role": "user",
                     "question": request.question,
                     "timestamp": timestamp,
                     "metadata": {
                         "model": "gpt-3.5-turbo-0125",
                         "user_type": request.user_type
-                    
-}
+                    }
                 }).execute()
 
+            # 🟥 Resposta da IA
             if final_answer.strip():
                 supabase.table("ai_chat_logs").insert({
                     "session_id": request.session_id,
                     "user_id": request.user_id,
-                    "account_id": request.account_id, 
+                    "account_id": request.account_id,
                     "role": "ai",
                     "answer": final_answer.strip(),
                     "timestamp": timestamp,
@@ -118,21 +124,21 @@ async def chat_with_agent(request: AgentRequest):
                         "model": "gpt-3.5-turbo-0125",
                         "user_type": request.user_type
                     }
-                    
                 }).execute()
 
         except Exception as e:
-            logger.error(f"❌ Error saving to Supabase: {e}")
+            logger.error(f"❌ Error saving logs to Supabase: {e}")
 
     return StreamingResponse(stream_response(), media_type="text/plain")
 
 
+# ✅ Histórico da sessão
 @app.get("/chat/history")
 async def chat_history(session_id: str, user_id: str = None, limit: int = 20):
     if not is_valid_uuid(session_id):
-        raise HTTPException(status_code=400, detail="Invalid session_id")
+        raise HTTPException(status_code=400, detail="❌ Invalid session_id")
 
-    logger.info(f"[History] Session: {session_id}")
+    logger.info(f"[History] Fetching for Session: {session_id}")
 
     history = get_session_history_from_db(session_id, limit=limit)
     messages = []
@@ -144,9 +150,13 @@ async def chat_history(session_id: str, user_id: str = None, limit: int = 20):
     return JSONResponse(messages)
 
 
+# ✅ Lista últimas sessões do usuário
 @app.get("/chat/sessions")
 def list_sessions(user_id: str):
-    logger.info(f"[Sessions] User: {user_id}")
+    if not user_id:
+        raise HTTPException(status_code=400, detail="❌ user_id is required")
+
+    logger.info(f"[Sessions] Fetching sessions for user: {user_id}")
 
     sql = f"""
     SELECT session_id, MAX(timestamp) as last_activity, MAX(question) as last_question
@@ -161,7 +171,11 @@ def list_sessions(user_id: str):
         rows = []
     return rows
 
+@app.get("/")
+def read_root():
+    return {"status": "up"}
 
+# ✅ Healthcheck
 @app.get("/health")
 def health_check():
     return {"status": "ok"}

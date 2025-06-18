@@ -1,25 +1,45 @@
 import os
 import requests
 from supabase import create_client, Client
-from dotenv import load_dotenv
 
-load_dotenv()
 
-SUPABASE_URL = os.environ.get("SUPABASE_URL")
-SUPABASE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
+def get_supabase_client() -> Client:
+    SUPABASE_URL = os.getenv("SUPABASE_URL")
+    SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
 
-supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+    if not SUPABASE_URL or not SUPABASE_KEY:
+        raise Exception(
+            "❌ Environment variables SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required!"
+        )
+
+    return create_client(SUPABASE_URL, SUPABASE_KEY)
+
 
 def run_sql_query(query: str):
+    SUPABASE_URL = os.getenv("SUPABASE_URL")
+    SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+
+    if not SUPABASE_URL or not SUPABASE_KEY:
+        raise Exception(
+            "❌ Environment variables SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required!"
+        )
+
     headers = {
         "apikey": SUPABASE_KEY,
         "Authorization": f"Bearer {SUPABASE_KEY}",
         "Content-Type": "application/json",
     }
+
     payload = {"query": query}
-    response = requests.post(f"{SUPABASE_URL}/rest/v1/rpc/exe_sql_query", json=payload, headers=headers)
+
+    response = requests.post(
+        f"{SUPABASE_URL}/rest/v1/rpc/exe_sql_query",
+        json=payload,
+        headers=headers,
+    )
 
     if response.status_code != 200:
-        return f"Error: {response.text}"
+        print(f"❌ SQL Query Error: {response.status_code} - {response.text}")
+        raise Exception(f"SQL Query failed: {response.text}")
 
     return response.json()

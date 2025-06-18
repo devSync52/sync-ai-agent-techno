@@ -1,13 +1,8 @@
 from langchain.tools import tool
-from supabase import create_client
-import os
+from app.utils.supabase_client import get_supabase_client
 
 
-# 🔗 Supabase client
-SUPABASE_URL = os.getenv("SUPABASE_URL")
-SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
-supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
-
+supabase = get_supabase_client()
 
 @tool
 def estimate_lead_time_by_destination(input: str) -> str:

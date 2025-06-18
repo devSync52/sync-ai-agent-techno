@@ -4,15 +4,12 @@ from app.langchain_v2.utils.date_parser import (
     parse_dual_period_input,
     get_comparative_period_smart,
 )
-from supabase import create_client
 import os
 import re
+from app.utils.supabase_client import get_supabase_client
 
 
-SUPABASE_URL = os.getenv("SUPABASE_URL")
-SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
-supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
-
+supabase = get_supabase_client()
 
 @tool
 def compare_sku_sales_by_period(input: str) -> str:

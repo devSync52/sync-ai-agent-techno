@@ -1,11 +1,10 @@
 from langchain.tools import tool
-from supabase import create_client
 import os
+from app.utils.supabase_client import get_supabase_client
 
-# 🔗 Supabase client
-SUPABASE_URL = os.getenv("SUPABASE_URL")
-SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
-supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+
+supabase = get_supabase_client()
+
 
 
 @tool
@@ -40,7 +39,7 @@ def get_products_at_risk(input: str = "30") -> str:
             coverage = row.get("estimated_coverage_days")
             stockout_date = row.get("estimated_stockout_date")
             urgency = row.get("urgency_level")
-            risk = "✅ At Risk" if row.get("at_risk") else "🟢 Safe"
+            risk = " At Risk" if row.get("at_risk") else " Safe"
 
             coverage_str = f"{coverage:.1f} days" if coverage is not None else "No data"
             stockout_str = f"{stockout_date}" if stockout_date else "Unknown"

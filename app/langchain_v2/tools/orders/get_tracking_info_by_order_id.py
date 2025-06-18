@@ -1,12 +1,10 @@
 from langchain.tools import tool
-from supabase import create_client, Client
 import os
 import re
+from app.utils.supabase_client import get_supabase_client
 
-# 🔐 Supabase config
-SUPABASE_URL = os.getenv("SUPABASE_URL")
-SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
-supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+
+supabase = get_supabase_client()
 
 @tool
 def get_tracking_info_by_order_id(input: str) -> str:

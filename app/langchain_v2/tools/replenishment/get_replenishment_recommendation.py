@@ -1,14 +1,10 @@
 from langchain.tools import tool
-from supabase import create_client
 from datetime import datetime, timedelta
-import os
 import re
+from app.utils.supabase_client import get_supabase_client
 
 
-# 🔗 Supabase Client
-SUPABASE_URL = os.getenv("SUPABASE_URL")
-SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
-supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+supabase = get_supabase_client()
 
 
 @tool
@@ -128,7 +124,7 @@ def get_replenishment_recommendation(input: str) -> str:
         # 🔥 Resposta Condicional
         if sku and avg_daily_sales == 0:
             return (
-                f"ℹ️ SKU `{sku}` has no sales in the last 30 days.\n"
+                f"ℹ SKU `{sku}` has no sales in the last 30 days.\n"
                 "Cannot provide a replenishment recommendation based on recent sales."
             )
 
@@ -140,11 +136,11 @@ def get_replenishment_recommendation(input: str) -> str:
             location_note = ""
             if not country_match:
                 location_note = (
-                    f"\n\n📍 Since no origin was specified, this calculation is based on the warehouse location: **{warehouse} ({warehouse_country})**."
+                    f"\n\n Since no origin was specified, this calculation is based on the warehouse location: **{warehouse} ({warehouse_country})**."
                 )
 
             return (
-                f"📦 **Replenishment Recommendation for SKU `{sku}`**\n"
+                f" **Replenishment Recommendation for SKU `{sku}`**\n"
                 f"- **Current Stock:** {current_stock}\n"
                 f"- **Avg Daily Sales (last 30 days):** {avg_daily_sales:.2f} units/day\n"
                 f"- **Lead Time from {destination_country}:** {lead_time_days} days\n"
