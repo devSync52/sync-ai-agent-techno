@@ -3,14 +3,12 @@ from datetime import datetime, timezone
 from app.utils.supabase_client import get_supabase_client
 
 
-supabase = get_supabase_client()
-
-
 class SupabaseConversationMemory:
     """Memória persistente no Supabase"""
 
     def __init__(self, session_id: str):
         self.session_id = session_id
+        self.supabase = get_supabase_client()
 
     @property
     def memory_variables(self):
@@ -20,7 +18,7 @@ class SupabaseConversationMemory:
     def load_memory_variables(self, inputs):
         """Carrega o histórico da sessão"""
         res = (
-            supabase.table("ai_chat_logs")
+            self.supabase.table("ai_chat_logs")
             .select("*")
             .eq("session_id", self.session_id)
             .order("timestamp", desc=False)
@@ -45,7 +43,7 @@ class SupabaseConversationMemory:
         timestamp = datetime.now(timezone.utc)
 
         if question:
-            supabase.table("ai_chat_logs").insert({
+            self.supabase.table("ai_chat_logs").insert({
                 "session_id": self.session_id,
                 "question": question,
                 "role": "user",
@@ -53,7 +51,7 @@ class SupabaseConversationMemory:
             }).execute()
 
         if answer:
-            supabase.table("ai_chat_logs").insert({
+            self.supabase.table("ai_chat_logs").insert({
                 "session_id": self.session_id,
                 "answer": answer,
                 "role": "ai",
@@ -62,7 +60,7 @@ class SupabaseConversationMemory:
 
     def clear(self):
         """Apaga todo o histórico da sessão"""
-        supabase.table("ai_chat_logs").delete().eq("session_id", self.session_id).execute()
+        self.supabase.table("ai_chat_logs").delete().eq("session_id", self.session_id).execute()
 
 
 # 🚀 Função para criar a memória
@@ -70,8 +68,10 @@ async def get_memory(session_id: str):
     return SupabaseConversationMemory(session_id=session_id)
 
 
-# 🔍 Função para puxar o histórico bruto (para endpoints de histórico/chat logs)
+# 🔍 Função para puxar o histórico bruto
 def get_session_history_from_db(session_id: str, limit: int = 20):
+    supabase = get_supabase_client()
+
     res = (
         supabase.table("ai_chat_logs")
         .select("*")
