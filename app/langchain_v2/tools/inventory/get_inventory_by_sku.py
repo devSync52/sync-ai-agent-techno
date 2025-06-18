@@ -1,4 +1,3 @@
-import os
 from langchain.tools import tool
 from app.utils.supabase_client import get_supabase_client
 

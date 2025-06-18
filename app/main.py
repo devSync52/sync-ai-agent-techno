@@ -5,37 +5,34 @@ from fastapi.responses import StreamingResponse, JSONResponse
 
 from app.langchain_v2.agent.sync_guardian_agent import createSyncGuardianAgent
 from app.langchain_v2.memory.session_memory import get_session_history_from_db
-from app.utils.supabase_client import supabase, run_sql_query
+from app.utils.supabase_client import get_supabase_client, run_sql_query
 
 from langchain_openai import ChatOpenAI
 from datetime import datetime, timezone
 import logging
 import re
-import os
 
 
-# 🔥 Logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("sync-ai-agent")
 
-# 🚀 FastAPI App
+
 app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # dominio
+    allow_origins=["*"],  # Permitir todos os domínios
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
+supabase = get_supabase_client()
 
-# ✅ Utils
 def is_valid_uuid(val: str) -> bool:
     return bool(re.match(r"^[a-f0-9-]{36}$", val.strip(), re.I))
 
 
-# ✅ Request Schema
 class AgentRequest(BaseModel):
     question: str
     account_id: str
@@ -44,7 +41,6 @@ class AgentRequest(BaseModel):
     user_type: str
 
 
-# 🚀 Endpoint principal do Chat
 @app.post("/chat")
 async def chat_with_agent(request: AgentRequest):
     if not is_valid_uuid(request.session_id):
@@ -53,14 +49,12 @@ async def chat_with_agent(request: AgentRequest):
     logger.info(f"[Chat] Session: {request.session_id} | Question: {request.question}")
 
     try:
-        # 🔥 LLM
         model = ChatOpenAI(
             model_name="gpt-3.5-turbo-0125",
             temperature=0,
             streaming=True,
         )
 
-        # 🔥 Cria agente + memória
         agent, chat_history = await createSyncGuardianAgent(
             model=model,
             account_id=request.account_id,
@@ -73,7 +67,6 @@ async def chat_with_agent(request: AgentRequest):
         logger.error(f"❌ Error creating agent: {e}")
         raise HTTPException(status_code=500, detail="Failed to create AI agent")
 
-    # 🔥 Streaming response
     async def stream_response():
         final_answer = ""
         try:
@@ -92,11 +85,9 @@ async def chat_with_agent(request: AgentRequest):
             logger.error(f"❌ Error in stream: {e}")
             yield f"Error: {str(e)}\n"
 
-        # 🔥 Salvar no Supabase
         try:
             timestamp = datetime.now(timezone.utc).isoformat()
 
-            # 🟦 Mensagem do usuário
             if request.question.strip():
                 supabase.table("ai_chat_logs").insert({
                     "session_id": request.session_id,
@@ -111,7 +102,6 @@ async def chat_with_agent(request: AgentRequest):
                     }
                 }).execute()
 
-            # 🟥 Resposta da IA
             if final_answer.strip():
                 supabase.table("ai_chat_logs").insert({
                     "session_id": request.session_id,
@@ -132,7 +122,6 @@ async def chat_with_agent(request: AgentRequest):
     return StreamingResponse(stream_response(), media_type="text/plain")
 
 
-# ✅ Histórico da sessão
 @app.get("/chat/history")
 async def chat_history(session_id: str, user_id: str = None, limit: int = 20):
     if not is_valid_uuid(session_id):
@@ -150,7 +139,6 @@ async def chat_history(session_id: str, user_id: str = None, limit: int = 20):
     return JSONResponse(messages)
 
 
-# ✅ Lista últimas sessões do usuário
 @app.get("/chat/sessions")
 def list_sessions(user_id: str):
     if not user_id:
@@ -171,11 +159,12 @@ def list_sessions(user_id: str):
         rows = []
     return rows
 
+
 @app.get("/")
 def read_root():
     return {"status": "up"}
 
-# ✅ Healthcheck
+
 @app.get("/health")
 def health_check():
     return {"status": "ok"}

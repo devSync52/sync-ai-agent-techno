@@ -1,6 +1,9 @@
 from langchain.schema import AIMessage, HumanMessage
 from datetime import datetime, timezone
-from app.utils.supabase_client import supabase
+from app.utils.supabase_client import get_supabase_client
+
+
+supabase = get_supabase_client()
 
 
 class SupabaseConversationMemory:
