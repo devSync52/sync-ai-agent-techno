@@ -1,25 +1,23 @@
-# 🔥 Usa imagem otimizada
-FROM python:3.11-slim-bullseye
+# 🔥 Imagem base leve
+FROM python:3.11.8-slim
 
-# 🏗 Instala dependências do sistema
-RUN apt-get update && apt-get install -y \
-    build-essential gcc \
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/*
-
-# 🗂️ Diretório de trabalho
+# 📁 Diretório de trabalho
 WORKDIR /app
 
-# 📜 Copia arquivos
-COPY requirements.txt .
-COPY . .
+# 🧠 Instala dependências do sistema (para alguns pacotes Python como httpx, uvicorn)
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    && apt-get clean
+
+# 🏗️ Copia os arquivos
+COPY . /app
 
 # 📦 Instala dependências Python
-RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir --upgrade pip \
+    && pip install --no-cache-dir -r requirements.txt
 
-# 🔥 Porta
+# 🚪 Expõe a porta
 EXPOSE 8000
 
-# 🚀 Comando pra rodar
+# 🚀 Comando para rodar a API
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
