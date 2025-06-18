@@ -4,15 +4,14 @@ from collections import defaultdict
 from app.langchain_v2.utils.date_parser import parse_period_input
 from app.utils.supabase_client import get_supabase_client
 
-
-supabase = get_supabase_client()
-
-
 @tool
 def get_top_selling_skus_by_period(input_text: str) -> str:
     """
     Get top SKUs by units sold in a period like 'May' or 'May 1 to May 10'.
     """
+        
+    supabase = get_supabase_client()
+    
     try:
         # Parse de data
         start_date, end_date = parse_period_input(input_text)

@@ -2,10 +2,6 @@ from langchain.tools import tool
 from app.langchain_v2.utils.date_parser import parse_period_input, get_previous_period
 from app.utils.supabase_client import get_supabase_client
 
-
-supabase = get_supabase_client()
-
-
 @tool
 def summarize_revenue_trend_by_client(input_text: str, client_name: str = None) -> str:
     """
@@ -13,6 +9,9 @@ def summarize_revenue_trend_by_client(input_text: str, client_name: str = None) 
     You can optionally specify a client name to filter.
     Example input: 'last 30 days', 'May', 'this week'
     """
+        
+    supabase = get_supabase_client()
+    
     try:
         start_date, end_date = parse_period_input(input_text)
         prev_start_date, prev_end_date = get_previous_period(start_date, end_date)

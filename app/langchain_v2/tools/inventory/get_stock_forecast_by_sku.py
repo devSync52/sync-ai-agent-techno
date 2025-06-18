@@ -3,7 +3,7 @@ from langchain.tools import tool
 from app.utils.supabase_client import get_supabase_client
 
 
-supabase = get_supabase_client()
+
 
 
 @tool
@@ -12,6 +12,9 @@ def get_stock_forecast_by_sku(sku: str) -> str:
     Estimate inventory coverage and stockout date for a given SKU.
     Sales velocity.
     """
+    
+    supabase = get_supabase_client()
+    
     try:
         response = (
             supabase

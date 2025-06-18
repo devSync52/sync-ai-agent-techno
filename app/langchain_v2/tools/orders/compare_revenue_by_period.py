@@ -3,17 +3,15 @@ from app.langchain_v2.utils.date_parser import parse_period_input, get_previous_
 import os
 from app.utils.supabase_client import get_supabase_client
 
-
-supabase = get_supabase_client()
-
-
 @tool
 def compare_revenue_by_period(input: str) -> str:
     """
     Compare total revenue between a period and its previous period.
     Example: 'Compare revenue this month' or 'Revenue from May'.
     """
-
+        
+    supabase = get_supabase_client()
+    
     try:
         start, end = parse_period_input(input)
         prev_start, prev_end = get_previous_period(start, end)

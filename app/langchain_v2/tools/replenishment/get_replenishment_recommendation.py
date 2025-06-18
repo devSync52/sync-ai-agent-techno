@@ -3,17 +3,15 @@ from datetime import datetime, timedelta
 import re
 from app.utils.supabase_client import get_supabase_client
 
-
-supabase = get_supabase_client()
-
-
 @tool
 def get_replenishment_recommendation(input: str) -> str:
     """
     Provides a replenishment recommendation for a SKU based on recent sales, current stock, and lead time.
     Example: 'When should I reorder SKU PT001UF from China?'
     """
-
+        
+    supabase = get_supabase_client()
+    
     try:
         print(f"[DEBUG] Input received: {input}")
 

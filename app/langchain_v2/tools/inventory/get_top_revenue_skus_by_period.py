@@ -5,14 +5,12 @@ import re
 from collections import defaultdict
 from app.utils.supabase_client import get_supabase_client
 
-
-supabase = get_supabase_client()
-
-
-
 @tool
 def get_top_revenue_skus_by_period(input_text: str) -> str:
     """Get top SKUs by revenue between a specified date range (e.g., 'May 1 to May 10')."""
+        
+    supabase = get_supabase_client()
+    
     try:
          # 🎯 Parse de data
         start_date, end_date = parse_period_input(input_text)

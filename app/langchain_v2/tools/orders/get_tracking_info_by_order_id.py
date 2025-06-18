@@ -3,15 +3,15 @@ import os
 import re
 from app.utils.supabase_client import get_supabase_client
 
-
-supabase = get_supabase_client()
-
 @tool
 def get_tracking_info_by_order_id(input: str) -> str:
     """
     Returns the tracking number and shipping carrier for a specific order ID.
     Accepts order numbers like '5011587'.
     """
+        
+    supabase = get_supabase_client()
+    
     try:
         match = re.search(r'\d{4,}', input)
         if not match:

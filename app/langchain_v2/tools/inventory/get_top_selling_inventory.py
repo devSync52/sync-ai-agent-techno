@@ -2,14 +2,14 @@ import os
 from langchain.tools import tool
 from app.utils.supabase_client import get_supabase_client
 
-
-supabase = get_supabase_client()
-
 @tool
 def get_top_selling_inventory(input: str) -> str:
     """
     Returns the top-selling SKUs with their stock coverage, daily velocity, and stockout date.
     """
+        
+    supabase = get_supabase_client()
+    
     try:
         response = (
             supabase

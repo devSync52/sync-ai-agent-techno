@@ -3,15 +3,14 @@ from app.langchain_v2.utils.date_parser import parse_period_input
 import os
 from app.utils.supabase_client import get_supabase_client
 
-
-supabase = get_supabase_client()
-
-
 @tool
 def summarize_order_status_by_client(input: str = "") -> str:
     """
     Provides a summary of orders grouped by client and order status.
     """
+        
+    supabase = get_supabase_client()
+    
     try:
         response = (
             supabase.table("ai_order_status_by_client")

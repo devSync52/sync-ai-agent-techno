@@ -2,10 +2,6 @@ from langchain.tools import tool
 from app.langchain_v2.utils.date_parser import parse_period_input
 from app.utils.supabase_client import get_supabase_client
 
-
-supabase = get_supabase_client()
-
-
 @tool
 def summarize_sales_by_period(input_text: str) -> str:
     """
@@ -16,6 +12,9 @@ Understands questions like:
 - 'Sales last month'
 - 'How much revenue yesterday?'
 """
+        
+    supabase = get_supabase_client()
+    
     try:
         start_date, end_date = parse_period_input(input_text)
 

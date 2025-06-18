@@ -3,16 +3,15 @@ from app.langchain_v2.utils.date_parser import parse_period_input
 import os
 from app.utils.supabase_client import get_supabase_client
 
-
-supabase = get_supabase_client()
-
-
 @tool
 def summarize_orders_by_period(input_text: str) -> str:
     """
     Provides an overview of the number of orders and total revenue in a given period, grouped by status.
     Example: 'Overview last month', 'Overview this week', 'Overview in May'.
     """
+        
+    supabase = get_supabase_client()
+    
     try:
         print(f"[DEBUG] Input received: {input_text}")
 

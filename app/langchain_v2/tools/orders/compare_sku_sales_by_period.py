@@ -8,15 +8,15 @@ import os
 import re
 from app.utils.supabase_client import get_supabase_client
 
-
-supabase = get_supabase_client()
-
 @tool
 def compare_sku_sales_by_period(input: str) -> str:
     """
     Compare sales of a specific SKU between a period and its previous period.
     Example: 'Compare sales of SKU PT001UF this month' or 'this month versus last month'.
     """
+        
+    supabase = get_supabase_client()
+    
     try:
         # 🔍 Extrair SKU
         sku_match = re.search(r"SKU\s*([A-Za-z0-9\-_\.]+)", input, re.IGNORECASE)

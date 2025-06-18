@@ -5,16 +5,15 @@ import os
 from app.langchain_v2.utils.date_parser import parse_period_input
 from app.utils.supabase_client import get_supabase_client
 
-
-supabase = get_supabase_client()
-
-
 @tool
 def summarize_orders_by_period_by_marketplace(input_text: str) -> str:
     """
     Summarizes orders by marketplace for a given period.
     Accepts periods like 'last week', 'this month', 'June', 'May 2024', or date ranges like 'May 1 to May 10'.
     """
+        
+    supabase = get_supabase_client()
+    
     try:
         start_str, end_str = parse_period_input(input_text)
         start_date = datetime.fromisoformat(start_str)

@@ -3,15 +3,14 @@ from app.langchain_v2.utils.date_parser import parse_period_input
 import os
 from app.utils.supabase_client import get_supabase_client
 
-
-supabase = get_supabase_client()
-
-
 @tool
 def get_top_selling_products_by_client(input: str = "") -> str:
     """
     Lists the top selling products grouped by client.
     """
+        
+    supabase = get_supabase_client()
+    
     try:
         response = (
             supabase.table("ai_top_selling_products_by_client")

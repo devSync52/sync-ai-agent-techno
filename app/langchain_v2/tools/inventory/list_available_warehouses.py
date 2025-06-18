@@ -4,13 +4,15 @@ import os
 from app.utils.supabase_client import get_supabase_client
 
 
-supabase = get_supabase_client()
+
 
 
 def get_warehouse_list() -> list[str]:
     """
     Internal function to retrieve the list of warehouses.
     """
+    supabase = get_supabase_client()
+    
     response = (
         supabase.table("ai_shipping_info")
         .select("ship_from_warehouse")

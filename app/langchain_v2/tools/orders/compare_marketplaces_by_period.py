@@ -3,10 +3,6 @@ from app.langchain_v2.utils.date_parser import parse_period_input, get_previous_
 import os
 from app.utils.supabase_client import get_supabase_client
 
-
-supabase = get_supabase_client()
-
-
 @tool
 def compare_marketplaces_by_period(input: str) -> dict:
     """
@@ -14,7 +10,9 @@ def compare_marketplaces_by_period(input: str) -> dict:
     Example: 'Compare marketplace sales this month'.
     Returns both summary text and chart data.
     """
-
+        
+    supabase = get_supabase_client()
+    
     try:
         start, end = parse_period_input(input)
         prev_start, prev_end = get_previous_period(start, end)

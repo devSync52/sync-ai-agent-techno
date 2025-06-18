@@ -3,16 +3,15 @@ from app.langchain_v2.utils.date_parser import parse_period_input
 import os
 from app.utils.supabase_client import get_supabase_client
 
-
-supabase = get_supabase_client()
-
-
 @tool
 def list_sales_by_period(input_text: str) -> str:
     """
     Lists orders for a given period with order ID, date, client name, and total.
     Example: 'List sales yesterday', 'List sales this week', 'List sales in May'.
     """
+        
+    supabase = get_supabase_client()
+    
     try:
         start_date, end_date = parse_period_input(input_text)
 

@@ -2,16 +2,15 @@ import os
 from langchain.tools import tool
 from app.utils.supabase_client import get_supabase_client
 
-
-supabase = get_supabase_client()
-
-
 @tool
 def get_order_status_by_id(order_id: str) -> str:
     """
     Retrieves the status and basic details of an order using its order ID.
     Example: 'Check order 102345'
     """
+        
+    supabase = get_supabase_client()
+    
     try:
         print(f"[DEBUG] Fetching order status for ID: {order_id}")
 

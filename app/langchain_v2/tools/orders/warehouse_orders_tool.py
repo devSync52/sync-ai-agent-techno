@@ -3,10 +3,6 @@ from app.langchain_v2.utils.date_parser import parse_period_input
 from supabase import create_client, Client
 from app.utils.supabase_client import get_supabase_client
 
-
-supabase = get_supabase_client()
-
-
 @tool
 def warehouse_orders_tool(input: str) -> str:
     """
@@ -15,7 +11,9 @@ def warehouse_orders_tool(input: str) -> str:
     - 'List warehouses'
     - 'How many orders were shipped from Miami last month'
     """
-
+        
+    supabase = get_supabase_client()
+    
     try:
         input_lower = input.lower().strip()
 

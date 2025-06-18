@@ -2,9 +2,6 @@ from langchain.tools import tool
 from app.utils.supabase_client import get_supabase_client
 
 
-supabase = get_supabase_client()
-
-
 @tool
 def get_inventory_by_sku(input: str) -> str:
     """
@@ -12,6 +9,8 @@ def get_inventory_by_sku(input: str) -> str:
     Input must be the SKU code (string).
     """
     sku = input.strip().upper()
+
+    supabase = get_supabase_client()
 
     try:
         response = (
@@ -29,7 +28,6 @@ def get_inventory_by_sku(input: str) -> str:
             lead_time = item.get("lead_time_days", "N/A")
             reorder_point = float(item.get("reorder_point", 0))
 
-            # 🚦 Stock status
             if qty == 0:
                 stock_status = "🔴 Stockout"
             elif qty <= reorder_point:
@@ -48,3 +46,5 @@ def get_inventory_by_sku(input: str) -> str:
 
     except Exception as e:
         return f"❌ Error retrieving inventory for SKU {sku}: {str(e)}"
+    
+get_inventory_by_sku_tool = get_inventory_by_sku

@@ -2,11 +2,6 @@ from langchain.tools import tool
 import os
 from app.utils.supabase_client import get_supabase_client
 
-
-supabase = get_supabase_client()
-
-
-
 @tool
 def get_products_at_risk(input: str = "30") -> str:
     """
@@ -14,6 +9,8 @@ def get_products_at_risk(input: str = "30") -> str:
     Default is 30 days.
     Input example: '30'
     """
+    supabase = get_supabase_client()
+    
     try:
         days_ahead = int(input.strip())
 

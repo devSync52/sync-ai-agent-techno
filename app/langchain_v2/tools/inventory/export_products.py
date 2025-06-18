@@ -6,7 +6,7 @@ from langchain.tools import tool
 from app.utils.supabase_client import get_supabase_client
 
 # 🔗 Supabase client
-supabase = get_supabase_client()
+
 
 # 🔖 App URL para gerar link de download
 APP_URL = os.getenv("APP_URL")
@@ -21,6 +21,7 @@ def export_products(_: str = "Export products") -> str:
     """
     Export the full product catalog to an Excel file and provide a download link.
     """
+    supabase = get_supabase_client()
     try:
         res = (
             supabase

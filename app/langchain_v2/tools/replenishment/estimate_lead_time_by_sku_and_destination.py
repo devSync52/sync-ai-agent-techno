@@ -2,17 +2,15 @@ from langchain.tools import tool
 import re
 from app.utils.supabase_client import get_supabase_client
 
-
-supabase = get_supabase_client()
-
-
 @tool
 def estimate_lead_time_by_sku_and_destination(input: str) -> str:
     """
     Estimates the total lead time for a SKU considering its client (destination) and transport mode.
     Example: 'How long to deliver SKU PT001UF to Denmark by air'.
     """
-
+        
+    supabase = get_supabase_client()
+    
     try:
         print(f"[DEBUG] Input received: {input}")
 

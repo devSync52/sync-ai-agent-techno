@@ -1,9 +1,6 @@
 from langchain.tools import tool
 from app.utils.supabase_client import get_supabase_client
 
-
-supabase = get_supabase_client()
-
 @tool
 def estimate_lead_time_by_destination(input: str) -> str:
     """
@@ -11,7 +8,9 @@ def estimate_lead_time_by_destination(input: str) -> str:
     it returns all available transport modes (air, sea, truck) for that destination.
     Example: 'How long to deliver to Denmark' or 'Delivery time to Germany by sea'.
     """
-
+    
+    supabase = get_supabase_client()
+    
     try:
         print(f"[DEBUG] Input received: {input}")
 

@@ -2,18 +2,16 @@ import os
 from langchain.tools import tool
 from app.utils.supabase_client import get_supabase_client
 
-
-supabase = get_supabase_client()
-
 APP_URL = os.getenv("APP_URL")
-
-
 
 @tool
 def list_products(input: str = "View products") -> str:
     """
     Lists the first 10 products in the catalog and informs where to view, manage, or download the full list.
     """
+        
+    supabase = get_supabase_client()
+    
     try:
         res = (
             supabase

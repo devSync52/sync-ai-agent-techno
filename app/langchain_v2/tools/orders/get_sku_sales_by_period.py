@@ -5,10 +5,6 @@ from langchain.tools import tool
 from app.langchain_v2.utils.date_parser import parse_period_input
 from app.utils.supabase_client import get_supabase_client
 
-
-supabase = get_supabase_client()
-
-
 @tool
 def get_sku_sales_by_period(input_text: str) -> str:
     """
@@ -16,6 +12,9 @@ def get_sku_sales_by_period(input_text: str) -> str:
     You must specify the SKU and a time period in the input.
     Example: 'Sales of SKU PT001UF last week'
     """
+        
+    supabase = get_supabase_client()
+    
     try:
 
         pattern = re.compile(r"(sku\s*)([a-z0-9\-_.]+)", re.IGNORECASE)
