@@ -13,7 +13,7 @@ from app.langchain_v2.tools.inventory import (
     get_top_revenue_skus_by_period,
     get_top_selling_inventory,
     get_top_selling_skus_by_period,
-    list_products_tool,
+    list_products,
     list_available_warehouses,
 )
 
@@ -84,7 +84,7 @@ async def createSyncGuardianAgent(
         get_top_revenue_skus_by_period,
         get_top_selling_inventory,
         get_top_selling_skus_by_period,
-        list_products_tool,
+        list_products,
         list_available_warehouses,
         handle_unknown_request,
         get_order_status_by_id,
