@@ -6,9 +6,10 @@ SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
 
 if not SUPABASE_URL or not SUPABASE_KEY:
-    raise Exception(
-        "❌ Environment variables SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required!"
-    )
+    print("❌ Environment variables missing:")
+    print(f"SUPABASE_URL: {SUPABASE_URL}")
+    print(f"SUPABASE_SERVICE_ROLE_KEY: {SUPABASE_KEY}")
+    raise Exception("❌ Environment variables SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required!")
 
 _supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
