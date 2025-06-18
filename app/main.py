@@ -27,7 +27,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-supabase = get_supabase_client()
 
 def is_valid_uuid(val: str) -> bool:
     return bool(re.match(r"^[a-f0-9-]{36}$", val.strip(), re.I))
@@ -89,6 +88,7 @@ async def chat_with_agent(request: AgentRequest):
             timestamp = datetime.now(timezone.utc).isoformat()
 
             if request.question.strip():
+                supabase = get_supabase_client()
                 supabase.table("ai_chat_logs").insert({
                     "session_id": request.session_id,
                     "user_id": request.user_id,
@@ -103,6 +103,7 @@ async def chat_with_agent(request: AgentRequest):
                 }).execute()
 
             if final_answer.strip():
+                supabase = get_supabase_client()
                 supabase.table("ai_chat_logs").insert({
                     "session_id": request.session_id,
                     "user_id": request.user_id,
