@@ -1,6 +1,7 @@
 import os
 from langchain.tools import tool
 from app.utils.supabase_client import get_supabase_client
+from app.langchain_v2.utils.session_context import get_current_session_context
 
 
 
@@ -12,21 +13,27 @@ def get_stock_forecast_by_sku(sku: str) -> str:
     Estimate inventory coverage and stockout date for a given SKU.
     Sales velocity.
     """
-    
+    context = get_current_session_context()
+    account_id = context.get("account_id")
+    user_type = context.get("user_type")
     supabase = get_supabase_client()
-    
     try:
-        response = (
+        query = (
             supabase
-            .table("ai_stock_coverage_unified")
+            .table("ai_stock_coverage_sellercloud_v2")
             .select("*")
             .eq("sku", sku)
-            .limit(1)
-            .execute()
         )
 
+        if user_type == "client":
+            query = query.eq("channel_account_id", account_id)
+        else:
+            query = query.eq("account_id", account_id)
+
+        response = query.limit(1).execute()
+
         if not response.data:
-            return f"⚠️ SKU {sku} not found in inventory data."
+            return f"SKU {sku} not found in inventory data."
 
         record = response.data[0]
         coverage_days = record.get("estimated_coverage_days")
@@ -36,7 +43,7 @@ def get_stock_forecast_by_sku(sku: str) -> str:
         product = record.get("product_name")
 
         return (
-            f"📦 {sku} ({product}) has {available} units available. "
+            f"{sku} ({product}) has {available} units available. "
             f"Daily sales velocity is {round(velocity, 2)} units/day. "
             f"Estimated coverage: {coverage_days} days. "
             f"Expected stockout date: {stockout_date}."

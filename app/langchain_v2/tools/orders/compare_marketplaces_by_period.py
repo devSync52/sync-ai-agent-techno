@@ -1,3 +1,4 @@
+from app.langchain_v2.utils.session_context import get_current_session_context
 from langchain.tools import tool
 from app.langchain_v2.utils.date_parser import parse_period_input, get_previous_period
 import os
@@ -12,16 +13,36 @@ def compare_marketplaces_by_period(input: str) -> dict:
     """
         
     supabase = get_supabase_client()
+    context = get_current_session_context()
+    if not context:
+        return {
+            "type": "error",
+            "message": "❌ Missing session context"
+        }
+    account_id = context["account_id"]
+    user_type = context["user_type"]
     
     try:
-        start, end = parse_period_input(input)
+        parsed = parse_period_input(input)
+        if (
+            not parsed
+            or not isinstance(parsed, (list, tuple))
+            or len(parsed) != 2
+            or any(p is None for p in parsed)
+        ):
+            raise ValueError("Could not parse period input")
+        start, end = parsed
         prev_start, prev_end = get_previous_period(start, end)
+        # Validate that all dates are non-empty strings
+        if not all(isinstance(d, str) and d for d in [start, end, prev_start, prev_end]):
+            raise ValueError("Invalid period dates received. Dates must be non-empty strings.")
 
         # 🚀 Query atual
         current_query = f"""
             SELECT marketplace_name, count(distinct order_id) as orders
             FROM view_all_orders
             WHERE order_date >= '{start}' AND order_date <= '{end}'
+            {f"AND {'channel_id' if user_type == 'client' else 'account_id'} = '{account_id}'"}
             GROUP BY marketplace_name
         """
 
@@ -30,6 +51,7 @@ def compare_marketplaces_by_period(input: str) -> dict:
             SELECT marketplace_name, count(distinct order_id) as orders
             FROM view_all_orders
             WHERE order_date >= '{prev_start}' AND order_date <= '{prev_end}'
+            {f"AND {'channel_id' if user_type == 'client' else 'account_id'} = '{account_id}'"}
             GROUP BY marketplace_name
         """
 
@@ -43,7 +65,7 @@ def compare_marketplaces_by_period(input: str) -> dict:
 
         # 📜 Texto resumo
         lines = [
-            f"📊 **Marketplace Comparison**",
+            f"**Marketplace Comparison**",
             f"- Current period: {start} to {end}",
             f"- Previous period: {prev_start} to {prev_end}",
             ""

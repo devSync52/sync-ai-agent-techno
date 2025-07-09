@@ -2,6 +2,7 @@ from langchain.tools import tool
 from app.langchain_v2.utils.date_parser import parse_period_input
 import os
 from app.utils.supabase_client import get_supabase_client
+from app.langchain_v2.utils.session_context import get_current_session_context
 
 @tool
 def summarize_orders_by_client(input: str = "") -> str:
@@ -10,13 +11,18 @@ def summarize_orders_by_client(input: str = "") -> str:
     """
         
     supabase = get_supabase_client()
+    session_context = get_current_session_context()
+    account_id = session_context.get("account_id")
+    user_type = session_context.get("user_type")
+    user_id = session_context.get("user_id")
     
     try:
-        response = (
-            supabase.table("ai_orders_summary_by_client")
-            .select("*")
-            .execute()
-        )
+        query = supabase.table("ai_orders_summary_by_client_v2").select("*")
+        if user_type == "client":
+            query = query.eq("channel_account_id", account_id)
+        else:
+            query = query.eq("account_id", account_id)
+        response = query.order("client_name").execute()
 
         data = response.data or []
 

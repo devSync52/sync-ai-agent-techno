@@ -2,6 +2,7 @@ from langchain.tools import tool
 import os
 import re
 from app.utils.supabase_client import get_supabase_client
+from app.langchain_v2.utils.session_context import get_current_session_context
 
 @tool
 def get_tracking_info_by_order_id(input: str) -> str:
@@ -11,6 +12,9 @@ def get_tracking_info_by_order_id(input: str) -> str:
     """
         
     supabase = get_supabase_client()
+    session = get_current_session_context()
+    account_id = session.get("account_id")
+    user_type = session.get("user_type")
     
     try:
         match = re.search(r'\d{4,}', input)
@@ -19,11 +23,16 @@ def get_tracking_info_by_order_id(input: str) -> str:
 
         order_id = match.group(0)
 
-        response = supabase.table("sellercloud_orders") \
+        query = supabase.table("sellercloud_orders") \
             .select("order_id, metadata") \
-            .eq("order_id", order_id) \
-            .maybe_single() \
-            .execute()
+            .eq("order_id", order_id)
+
+        if user_type == "client":
+            query = query.eq("channel_account_id", account_id)
+        else:
+            query = query.eq("account_id", account_id)
+
+        response = query.maybe_single().execute()
 
         data = response.data
         if not data:

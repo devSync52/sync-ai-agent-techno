@@ -15,6 +15,16 @@ def summarize_orders_by_period_by_marketplace(input_text: str) -> str:
     supabase = get_supabase_client()
     
     try:
+        from app.langchain_v2.utils.session_context import get_current_session_context
+        context = get_current_session_context()
+        account_id = context.get("account_id")
+        user_type = context.get("user_type")
+
+        if not account_id:
+            return "❌ Missing account ID in session context."
+
+        filter_column = "account_id" if user_type == "owner" else "channel_account_id"
+
         start_str, end_str = parse_period_input(input_text)
         start_date = datetime.fromisoformat(start_str)
         end_date = datetime.fromisoformat(end_str)
@@ -27,8 +37,9 @@ def summarize_orders_by_period_by_marketplace(input_text: str) -> str:
               sum(case when status_code = 2 then 1 else 0 end) as total_processing,
               sum(case when status_code = 3 then 1 else 0 end) as total_shipped,
               sum(case when status_code = -1 then 1 else 0 end) as total_cancelled
-            from public.ai_orders_unified
+            from public.ai_orders_unified_4
             where order_date between '{start_date}' and '{end_date}'
+              and {filter_column} = '{account_id}'
             group by marketplace_name
             order by total_orders desc
         """

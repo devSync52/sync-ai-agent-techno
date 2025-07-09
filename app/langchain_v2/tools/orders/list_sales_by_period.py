@@ -1,5 +1,6 @@
 from langchain.tools import tool
 from app.langchain_v2.utils.date_parser import parse_period_input
+from app.langchain_v2.utils.session_context import get_current_session_context
 import os
 from app.utils.supabase_client import get_supabase_client
 
@@ -14,27 +15,37 @@ def list_sales_by_period(input_text: str) -> str:
     
     try:
         start_date, end_date = parse_period_input(input_text)
+        session_context = get_current_session_context()
+        account_id = session_context.get("account_id")
+        user_type = session_context.get("user_type")
+        user_id = session_context.get("user_id")
 
         print(f"[DEBUG] Parsed period: {start_date} to {end_date}")
 
         # 🔥 Lógica sniper — se for um único dia, usa EQ
         if start_date == end_date:
-            response = (
-                supabase.table("ai_orders_unified")
+            query = (
+                supabase.table("ai_orders_unified_4")
                 .select("order_id, order_date, client_name, grand_total")
                 .eq("order_date", start_date)
                 .order("order_date", desc=False)
-                .execute()
             )
         else:
-            response = (
-                supabase.table("ai_orders_unified")
+            query = (
+                supabase.table("ai_orders_unified_4")
                 .select("order_id, order_date, client_name, grand_total")
                 .gte("order_date", start_date)
                 .lte("order_date", end_date)
                 .order("order_date", desc=False)
-                .execute()
             )
+
+        # 🎯 Filtra por escopo de usuário
+        if user_type == "client":
+            query = query.eq("channel_account_id", account_id)
+        else:
+            query = query.eq("account_id", account_id)
+
+        response = query.execute()
 
         data = response.data or []
 
@@ -47,8 +58,8 @@ def list_sales_by_period(input_text: str) -> str:
 
         for order in data:
             lines.append(
-                f"- {order.get('order_id')} | 📅 {order.get('order_date')} | "
-                f" {order.get('client_name')} | 💰 ${float(order.get('grand_total', 0)):,.2f}"
+                f"- {order.get('order_id')} | {order.get('order_date')} | "
+                f" {order.get('client_name')} | ${float(order.get('grand_total') or 0):,.2f}"
             )
 
         return "\n".join(lines)

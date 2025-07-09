@@ -1,6 +1,7 @@
 import os
 from langchain.tools import tool
 from app.utils.supabase_client import get_supabase_client
+from app.langchain_v2.utils.session_context import get_current_session_context
 
 @tool
 def get_top_selling_inventory(input: str) -> str:
@@ -11,16 +12,25 @@ def get_top_selling_inventory(input: str) -> str:
     supabase = get_supabase_client()
     
     try:
-        response = (
+        session = get_current_session_context()
+        account_id = session.get("account_id")
+        user_type = session.get("user_type")
+
+        query = (
             supabase
-            .table("ai_stock_coverage_unified")
+            .table("ai_stock_coverage_sellercloud_v3")
             .select(
                 "sku, product_name, quantity_available, estimated_coverage_days, estimated_stockout_date, daily_sales_velocity, last_30d_sold"
             )
             .order("last_30d_sold", desc=True)
-            .limit(5)
-            .execute()
         )
+
+        if user_type == "client":
+            query = query.eq("channel_account_id", account_id)
+        else:
+            query = query.eq("account_id", account_id)
+
+        response = query.limit(5).execute()
 
         if response.data:
             lines = []
@@ -36,9 +46,9 @@ def get_top_selling_inventory(input: str) -> str:
                     f"{sku} ({name}) – {available} units available, sells approx. {velocity:.2f} units/day, "
                     f"covers approx. {coverage} days, estimated stockout: {stockout_date}."
                 )
-            return "📦 **Top-selling products:**\n" + "\n".join(lines)
+            return "**Top-selling products:**\n" + "\n".join(lines)
         else:
-            return "⚠️ No top-selling product data found."
+            return "No top-selling product data found."
 
     except Exception as e:
         return f"❌ Error retrieving top-selling inventory: {str(e)}"

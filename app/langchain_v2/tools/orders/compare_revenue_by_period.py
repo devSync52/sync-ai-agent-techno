@@ -1,5 +1,6 @@
 from langchain.tools import tool
 from app.langchain_v2.utils.date_parser import parse_period_input, get_previous_period
+from app.langchain_v2.utils.session_context import get_current_session_context
 import os
 from app.utils.supabase_client import get_supabase_client
 
@@ -11,20 +12,30 @@ def compare_revenue_by_period(input: str) -> str:
     """
         
     supabase = get_supabase_client()
+    session = get_current_session_context()
+    account_id = session.get("account_id")
+    user_type = session.get("user_type")
     
     try:
         start, end = parse_period_input(input)
         prev_start, prev_end = get_previous_period(start, end)
 
+        if user_type == "client":
+            account_filter = f"channel_id = '{account_id}'"
+        else:
+            account_filter = f"account_id = '{account_id}'"
+
         current_query = f"""
             SELECT sum(total_amount) AS total_revenue
             FROM view_all_orders
             WHERE order_date >= '{start}' AND order_date <= '{end}'
+            AND {account_filter}
         """
         previous_query = f"""
             SELECT sum(total_amount) AS total_revenue
             FROM view_all_orders
             WHERE order_date >= '{prev_start}' AND order_date <= '{prev_end}'
+            AND {account_filter}
         """
 
         current_res = supabase.rpc("raw_sql", {"sql": current_query}).execute()

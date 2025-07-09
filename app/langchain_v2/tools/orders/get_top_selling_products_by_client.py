@@ -3,19 +3,31 @@ from app.langchain_v2.utils.date_parser import parse_period_input
 import os
 from app.utils.supabase_client import get_supabase_client
 
+# Import for session context
+from app.langchain_v2.utils.session_context import get_current_session_context
+
 @tool
 def get_top_selling_products_by_client(input: str = "") -> str:
     """
     Lists the top selling products grouped by client.
     """
-        
+    # Get session context for account_id and user_type
+    session = get_current_session_context()
+    account_id = session.get("account_id")
+    user_type = session.get("user_type")
+
     supabase = get_supabase_client()
-    
+
     try:
+        query = supabase.table("ai_top_selling_products_by_client_v2").select("*")
+
+        if user_type == "client":
+            query = query.eq("channel_account_id", account_id)
+        else:
+            query = query.eq("account_id", account_id)
+
         response = (
-            supabase.table("ai_top_selling_products_by_client")
-            .select("*")
-            .order("total_quantity_sold", desc=True)
+            query.order("total_quantity_sold", desc=True)
             .limit(50)  # 🔥 Pode ajustar esse limite
             .execute()
         )

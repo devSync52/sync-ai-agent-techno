@@ -115,12 +115,30 @@ async def createSyncGuardianAgent(
         tools=tools,
     )
 
-    executor = AgentExecutor(
-        agent=agent,
-        tools=tools,
-        verbose=True,
-        handle_parsing_errors=True,
+    from langchain_core.runnables import RunnableLambda
+
+    executor = (
+        RunnableLambda(lambda x: {
+            "input": x["input"],
+            "chat_history": x["chat_history"],  # ✅ Corrigido para incluir chat_history
+            "account_id": x.get("account_id"),
+            "user_id": x.get("user_id"),
+            "session_id": x.get("session_id"),
+            "user_type": x.get("user_type"),
+        }) | AgentExecutor(
+            agent=agent,
+            tools=tools,
+            verbose=True,
+            handle_parsing_errors=True,
+        )
     )
 
     # 🔥 Retorna executor + histórico junto (como tuple ou dict)
     return executor, chat_history
+
+async def stream_response(agent, input_data):
+    final_answer = ""
+    async for chunk in agent.astream(input_data):
+        yield chunk
+        final_answer += chunk.get("text", "")
+    # log_final_response(session_id, user_id, final_answer)

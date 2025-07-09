@@ -14,6 +14,10 @@ def get_sku_sales_by_period(input_text: str) -> str:
     """
         
     supabase = get_supabase_client()
+    from app.langchain_v2.utils.session_context import get_current_session_context
+    context = get_current_session_context()
+    account_id = context.get("account_id")
+    user_type = context.get("user_type")
     
     try:
 
@@ -34,15 +38,21 @@ def get_sku_sales_by_period(input_text: str) -> str:
         print(f"[DEBUG] Fetching sales for {sku} from {start_date} to {end_date}")
 
 
-        response = (
+        query = (
             supabase
-            .table("ai_sku_sales_per_day_unified")
+            .table("ai_sku_sales_per_day_unified_v2")
             .select("quantity_sold, total_revenue")
             .eq("sku", sku)
             .gte("sales_date", start_date)
             .lte("sales_date", end_date)
-            .execute()
         )
+
+        if user_type == "client":
+            query = query.eq("channel_account_id", account_id)
+        else:
+            query = query.eq("account_id", account_id)
+
+        response = query.execute()
 
         data = response.data or []
         if not data:

@@ -1,3 +1,4 @@
+from app.langchain_v2.utils.session_context import get_current_session_context
 from langchain.tools import tool
 import os
 from app.utils.supabase_client import get_supabase_client
@@ -14,13 +15,30 @@ def get_products_at_risk(input: str = "30") -> str:
     try:
         days_ahead = int(input.strip())
 
-        response = (
-            supabase.table("ai_stock_coverage_unified_2")
+        session_ctx = get_current_session_context()
+        user_type = session_ctx.get("user_type", "owner")
+        account_id = session_ctx.get("account_id")
+
+        table_name = (
+            "ai_stock_coverage_sellercloud"
+            if user_type in ["owner", "admin"]
+            else "ai_stock_coverage_sellercloud"
+        )
+
+        query = (
+            supabase.table(table_name)
             .select("*")
             .lte("estimated_coverage_days", days_ahead)
+            .gt("quantity_available", 0)
             .order("estimated_coverage_days", desc=False)
-            .execute()
         )
+
+        if user_type == "client" and account_id:
+            query = query.eq("channel_account_id", account_id)
+        elif user_type in ["owner", "admin"] and account_id:
+            query = query.eq("account_id", account_id)
+
+        response = query.execute()
 
         data = response.data or []
 

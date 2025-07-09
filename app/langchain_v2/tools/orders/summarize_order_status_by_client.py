@@ -2,6 +2,7 @@ from langchain.tools import tool
 from app.langchain_v2.utils.date_parser import parse_period_input
 import os
 from app.utils.supabase_client import get_supabase_client
+from app.langchain_v2.utils.session_context import get_current_session_context
 
 @tool
 def summarize_order_status_by_client(input: str = "") -> str:
@@ -10,14 +11,18 @@ def summarize_order_status_by_client(input: str = "") -> str:
     """
         
     supabase = get_supabase_client()
+    context = get_current_session_context()
+    account_id = context.get("account_id")
+    user_type = context.get("user_type")
     
     try:
-        response = (
-            supabase.table("ai_order_status_by_client")
-            .select("*")
-            .order("client_name")
-            .execute()
-        )
+        query = supabase.table("ai_order_status_by_client_v2").select("*")
+        if user_type == "client":
+            query = query.eq("channel_account_id", account_id)
+        else:
+            query = query.eq("account_id", account_id)
+        query = query.order("client_name")
+        response = query.execute()
 
         data = response.data or []
 
@@ -42,14 +47,14 @@ def summarize_order_status_by_client(input: str = "") -> str:
             })
 
         # 🔥 Construção da resposta formatada
-        lines = ["📦 **Order Status Summary by Client:**\n"]
+        lines = ["**Order Status Summary by Client:**\n"]
         for client, statuses in grouped.items():
             lines.append(f"**{client}**")
             for s in statuses:
                 lines.append(
                     f"• {s['status']} - Orders: {s['orders']} | Revenue: ${s['revenue']:,.2f}"
                 )
-            lines.append("")  # 🔥 Linha vazia entre clientes
+            lines.append("")  # Linha vazia entre clientes
 
         return "\n".join(lines)
 

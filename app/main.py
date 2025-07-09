@@ -6,6 +6,7 @@ from fastapi.responses import StreamingResponse, JSONResponse
 from app.langchain_v2.agent.sync_guardian_agent import createSyncGuardianAgent
 from app.langchain_v2.memory.session_memory import get_session_history_from_db
 from app.utils.supabase_client import get_supabase_client, run_sql_query
+from app.langchain_v2.utils.session_context import set_current_session_context
 
 from langchain_openai import ChatOpenAI
 from datetime import datetime, timezone
@@ -47,12 +48,26 @@ async def chat_with_agent(request: AgentRequest):
 
     logger.info(f"[Chat] Session: {request.session_id} | Question: {request.question}")
 
+    logger.info(f"🔍 Dados da sessão recebidos:")
+    logger.info(f"  - account_id: {request.account_id}")
+    logger.info(f"  - user_id: {request.user_id}")
+    logger.info(f"  - session_id: {request.session_id}")
+    logger.info(f"  - user_type: {request.user_type}")
+
     try:
         model = ChatOpenAI(
             model_name="gpt-3.5-turbo-0125",
             temperature=0,
             streaming=True,
         )
+
+        # 📌 Armazena o contexto da sessão para tools futuras
+        set_current_session_context({
+            "account_id": request.account_id,
+            "user_id": request.user_id,
+            "session_id": request.session_id,
+            "user_type": request.user_type
+        })
 
         agent, chat_history = await createSyncGuardianAgent(
             model=model,
@@ -67,22 +82,34 @@ async def chat_with_agent(request: AgentRequest):
         raise HTTPException(status_code=500, detail="Failed to create AI agent")
 
     async def stream_response():
+        logger.info(f"🚀 Iniciando stream com dados:")
+        logger.info(f"  - question: {request.question}")
+        logger.info(f"  - account_id: {request.account_id}")
+        logger.info(f"  - user_id: {request.user_id}")
+        logger.info(f"  - session_id: {request.session_id}")
+        logger.info(f"  - user_type: {request.user_type}")
+
         final_answer = ""
         try:
-            async for chunk in agent.astream({
+            agent_input = {
                 "input": request.question,
                 "chat_history": chat_history,
-            }):
+                "account_id": request.account_id,
+                "user_id": request.user_id,
+                "session_id": request.session_id,
+                "user_type": request.user_type,
+            }
+            async for chunk in agent.astream(agent_input):
                 if isinstance(chunk, str):
                     final_answer += chunk
                     yield chunk
                 elif "output" in chunk:
                     final_answer += chunk["output"]
                     yield chunk["output"]
-
         except Exception as e:
             logger.error(f"❌ Error in stream: {e}")
-            yield f"Error: {str(e)}\n"
+            final_answer = f"Error: {str(e)}\n"
+            yield final_answer
 
         try:
             timestamp = datetime.now(timezone.utc).isoformat()

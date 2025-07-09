@@ -3,6 +3,7 @@ from langchain.tools import tool
 from collections import defaultdict
 from app.langchain_v2.utils.date_parser import parse_period_input
 from app.utils.supabase_client import get_supabase_client
+from app.langchain_v2.utils.session_context import get_current_session_context
 
 @tool
 def get_top_selling_skus_by_period(input_text: str) -> str:
@@ -10,6 +11,10 @@ def get_top_selling_skus_by_period(input_text: str) -> str:
     Get top SKUs by units sold in a period like 'May' or 'May 1 to May 10'.
     """
         
+    context = get_current_session_context()
+    account_id = context.get("account_id")
+    user_type = context.get("user_type")
+
     supabase = get_supabase_client()
     
     try:
@@ -21,11 +26,16 @@ def get_top_selling_skus_by_period(input_text: str) -> str:
         # Consulta de vendas
         sales_query = (
             supabase
-            .table("ai_sku_sales_per_day_unified")
+            .table("ai_sku_sales_per_day_unified_v2")
             .select("sku, quantity_sold, total_revenue")
             .gte("sales_date", start_date)
             .lte("sales_date", end_date)
         )
+
+        if user_type == "client":
+            sales_query = sales_query.eq("channel_account_id", account_id)
+        else:
+            sales_query = sales_query.eq("account_id", account_id)
 
         print(f"[DEBUG] Sales query filters: sales_date >= {start_date} AND sales_date <= {end_date}")
 

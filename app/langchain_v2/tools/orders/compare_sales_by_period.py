@@ -1,5 +1,6 @@
 from langchain.tools import tool
 from app.langchain_v2.utils.date_parser import parse_period_input, get_previous_period
+from app.langchain_v2.utils.session_context import get_current_session_context
 import os
 from app.utils.supabase_client import get_supabase_client
 
@@ -13,25 +14,42 @@ def compare_sales_by_period(input: str) -> str:
     supabase = get_supabase_client()
     
     try:
+        session = get_current_session_context()
+        account_id = session.get("account_id")
+        user_type = session.get("user_type")
+
         start, end = parse_period_input(input)
         prev_start, prev_end = get_previous_period(start, end)
 
-        # 🚀 Query atual
-        current_query = f"""
-            SELECT count(distinct order_id) AS total_orders
-            FROM view_all_orders
-            WHERE order_date >= '{start}' AND order_date <= '{end}'
-        """
+        if user_type == "client":
+            current_query = f"""
+                SELECT count(distinct order_id) AS total_orders
+                FROM view_all_orders
+                WHERE order_date >= '{start}' AND order_date <= '{end}'
+                  AND channel_id = '{account_id}'
+            """
+            previous_query = f"""
+                SELECT count(distinct order_id) AS total_orders
+                FROM view_all_orders
+                WHERE order_date >= '{prev_start}' AND order_date <= '{prev_end}'
+                  AND channel_id = '{account_id}'
+            """
+        else:
+            current_query = f"""
+                SELECT count(distinct order_id) AS total_orders
+                FROM view_all_orders
+                WHERE order_date >= '{start}' AND order_date <= '{end}'
+                  AND account_id = '{account_id}'
+            """
+            previous_query = f"""
+                SELECT count(distinct order_id) AS total_orders
+                FROM view_all_orders
+                WHERE order_date >= '{prev_start}' AND order_date <= '{prev_end}'
+                  AND account_id = '{account_id}'
+            """
 
         current_res = supabase.rpc("raw_sql", {"sql": current_query}).execute()
         current = current_res.data[0]["total_orders"] or 0
-
-        # 🚀 Query anterior
-        previous_query = f"""
-            SELECT count(distinct order_id) AS total_orders
-            FROM view_all_orders
-            WHERE order_date >= '{prev_start}' AND order_date <= '{prev_end}'
-        """
 
         previous_res = supabase.rpc("raw_sql", {"sql": previous_query}).execute()
         previous = previous_res.data[0]["total_orders"] or 0

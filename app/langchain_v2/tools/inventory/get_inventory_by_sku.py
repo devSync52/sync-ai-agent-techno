@@ -1,3 +1,4 @@
+from app.langchain_v2.utils.session_context import get_current_session_context
 from langchain.tools import tool
 from app.utils.supabase_client import get_supabase_client
 
@@ -13,13 +14,22 @@ def get_inventory_by_sku(input: str) -> str:
     supabase = get_supabase_client()
 
     try:
-        response = (
-            supabase.table("ai_products_unified")
+        session = get_current_session_context()
+        account_id = session.get("account_id")
+        user_type = session.get("user_type")
+
+        query = (
+            supabase.table("ai_products_unified_v3")
             .select("sku, quantity_available, company_name, lead_time_days, reorder_point")
             .eq("sku", sku)
-            .limit(1)
-            .execute()
         )
+
+        if user_type == "client":
+            query = query.eq("channel_account_id", account_id)
+        else:
+            query = query.eq("account_id", account_id)
+
+        response = query.limit(1).execute()
 
         if response.data and len(response.data) > 0:
             item = response.data[0]
@@ -29,20 +39,20 @@ def get_inventory_by_sku(input: str) -> str:
             reorder_point = float(item.get("reorder_point", 0))
 
             if qty == 0:
-                stock_status = "🔴 Stockout"
+                stock_status = "Stockout"
             elif qty <= reorder_point:
-                stock_status = "🟡 Below reorder point"
+                stock_status = "Below reorder point"
             else:
-                stock_status = "🟢 Stock level OK"
+                stock_status = "Stock level OK"
 
             return (
-                f"📦 SKU **{sku}** has **{qty} units** available at **{warehouse}**.\n"
-                f"⏳ Lead time: **{lead_time} days**.\n"
-                f"🚩 Reorder point: **{reorder_point} units**.\n"
+                f"SKU **{sku}** has **{qty} units** available at **{warehouse}**.\n"
+                f"Lead time: **{lead_time} days**.\n"
+                f"Reorder point: **{reorder_point} units**.\n"
                 f"{stock_status}"
             )
         else:
-            return f"⚠️ No inventory data found for SKU {sku}."
+            return f"No inventory data found for SKU {sku}."
 
     except Exception as e:
         return f"❌ Error retrieving inventory for SKU {sku}: {str(e)}"

@@ -4,6 +4,7 @@ from app.langchain_v2.utils.date_parser import (
     parse_dual_period_input,
     get_comparative_period_smart,
 )
+from app.langchain_v2.utils.session_context import get_current_session_context
 import os
 import re
 from app.utils.supabase_client import get_supabase_client
@@ -18,6 +19,10 @@ def compare_sku_sales_by_period(input: str) -> str:
     supabase = get_supabase_client()
     
     try:
+        context = get_current_session_context()
+        account_id = context.get("account_id")
+        user_type = context.get("user_type")
+
         # 🔍 Extrair SKU
         sku_match = re.search(r"SKU\s*([A-Za-z0-9\-_\.]+)", input, re.IGNORECASE)
 
@@ -45,7 +50,9 @@ def compare_sku_sales_by_period(input: str) -> str:
             "start_date": start,
             "end_date": end,
             "prev_start_date": prev_start,
-            "prev_end_date": prev_end
+            "prev_end_date": prev_end,
+            "account_id": account_id,
+            "user_type": user_type
         }).execute()
 
         if not response.data or len(response.data) == 0:

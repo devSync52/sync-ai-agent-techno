@@ -12,6 +12,11 @@ def get_order_status_by_id(order_id: str) -> str:
     supabase = get_supabase_client()
     
     try:
+        from app.langchain_v2.utils.session_context import get_current_session_context
+        session = get_current_session_context()
+        account_id = session.get("account_id")
+        user_type = session.get("user_type")
+
         print(f"[DEBUG] Fetching order status for ID: {order_id}")
 
         response = (
@@ -19,6 +24,7 @@ def get_order_status_by_id(order_id: str) -> str:
             .table("view_all_orders")
             .select("*")
             .eq("order_id", order_id)
+            .eq("account_id" if user_type == "owner" else "channel_id", account_id)
             .single()
             .execute()
         )

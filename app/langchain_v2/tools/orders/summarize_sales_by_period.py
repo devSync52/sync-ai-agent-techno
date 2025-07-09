@@ -15,20 +15,39 @@ Understands questions like:
         
     supabase = get_supabase_client()
     
+    from app.langchain_v2.utils.session_context import get_current_session_context
+    ctx = get_current_session_context()
+
+    if not ctx or not ctx.get("account_id") or not ctx.get("user_type"):
+        return "❌ Session context not available. Please log in."
+
+    account_id = ctx["account_id"]
+    user_type = ctx["user_type"]
+    
     try:
         start_date, end_date = parse_period_input(input_text)
 
         print(f"[DEBUG] Parsed period: {start_date} to {end_date}")
 
-        response = supabase.rpc("summarize_sales_by_period", {
-            "start_date": start_date,
-            "end_date": end_date
-        }).execute()
+        query = (
+            supabase
+            .from_("ai_orders_unified_4")
+            .select("grand_total")
+            .gte("order_date", start_date)
+            .lte("order_date", end_date)
+            .in_("status_code", [3, 4])
+        )
 
-        data = response.data[0] if response.data else {}
+        if user_type == "client":
+            query = query.eq("channel_account_id", account_id)
+        else:
+            query = query.eq("account_id", account_id)
 
-        total_orders = data.get("total_orders", 0)
-        total_revenue = data.get("total_revenue", 0)
+        response = query.execute()
+        rows = response.data or []
+
+        total_orders = len(rows)
+        total_revenue = sum(order.get("grand_total", 0) for order in rows)
 
         if total_orders == 0:
             return f"❌ No sales found between {start_date} and {end_date}."

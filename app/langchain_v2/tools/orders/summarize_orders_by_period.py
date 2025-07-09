@@ -2,9 +2,10 @@ from langchain.tools import tool
 from app.langchain_v2.utils.date_parser import parse_period_input
 import os
 from app.utils.supabase_client import get_supabase_client
+from app.langchain_v2.utils.session_context import get_current_session_context
 
 @tool
-def summarize_orders_by_period(input_text: str) -> str:
+def summarize_orders_by_period(input_text: str, account_id: str = None, user_type: str = None, user_id: str = None) -> str:
     """
     Provides an overview of the number of orders and total revenue in a given period, grouped by status.
     Example: 'Overview last month', 'Overview this week', 'Overview in May'.
@@ -14,19 +15,58 @@ def summarize_orders_by_period(input_text: str) -> str:
     
     try:
         print(f"[DEBUG] Input received: {input_text}")
+        
+        # ✅ Usar parâmetros recebidos, com fallback para contexto
+        context = get_current_session_context()
+        account_id = account_id or context.get("account_id")
+        user_type = user_type or context.get("user_type")
+        user_id = user_id or context.get("user_id")
+        print(f"[DEBUG] Session context - account_id: {account_id} | user_type: {user_type}")
 
         start_date, end_date = parse_period_input(input_text)
         print(f"[DEBUG] Parsed period: {start_date} to {end_date}")
 
-        response = supabase.rpc("summarize_orders_overview", {
-            "start_date": start_date,
-            "end_date": end_date
-        }).execute()
+        if user_type == "owner":
+            query = (
+                supabase.from_("ai_orders_unified_4")
+                .select("order_status, grand_total")
+                .gte("order_date", start_date)
+                .lte("order_date", end_date)
+                .eq("account_id", account_id)
+            )
+        elif user_type == "client":
+            query = (
+                supabase.from_("ai_orders_unified_4")
+                .select("order_status, grand_total")
+                .gte("order_date", start_date)
+                .lte("order_date", end_date)
+                .eq("channel_account_id", account_id)
+            )
+        else:
+            return f"❌ Unknown user type: {user_type}"
 
-        data = response.data or []
+        response = query.execute()
+        rows = response.data or []
 
-        if not data:
+        if not rows:
             return f"No orders found between {start_date} and {end_date}."
+
+        # Aggregate results in Python
+        from collections import defaultdict
+        grouped = defaultdict(lambda: {"total_orders": 0, "total_revenue": 0.0})
+        for row in rows:
+            status = row.get("order_status", "Unknown")
+            grouped[status]["total_orders"] += 1
+            grouped[status]["total_revenue"] += float(row.get("grand_total") or 0)
+
+        data = [
+            {
+                "status": status,
+                "total_orders": stats["total_orders"],
+                "total_revenue": stats["total_revenue"],
+            }
+            for status, stats in grouped.items()
+        ]
 
         # 🔥 Formatting
         lines = [f"📦 **Order Overview from {start_date} to {end_date}:**\n"]
