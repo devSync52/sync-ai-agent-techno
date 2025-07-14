@@ -33,6 +33,18 @@ Q: Can you inform the tracking number of order 12345 and which courier was used?
 Q: How many orders were shipped from Houston this month?
 Q: What’s the average picking accuracy rate in Miami?
 
+Q: What are the items included in order 5012296?
+
+# --- Perguntas específicas para clientes ---
+Q: How many orders were delivered last month?
+Q: Which marketplace had the most shipped orders last week?
+Q: When was my last order shipped? Please return the most recent shipped order for this client, including ship date, carrier, and tracking if available.
+Q: Can you summarize all shipped orders from the last 15 days?
+Q: How many orders are still pending delivery this month?
+Q: How many orders have tracking info but were not delivered yet?
+
+Q: Can you show me all products and quantities for order 113-8231998-5810652?
+
 ------------------------------------
 🏢 Storage and Operational Details
 ------------------------------------

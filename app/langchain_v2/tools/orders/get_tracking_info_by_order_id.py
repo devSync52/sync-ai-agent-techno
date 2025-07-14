@@ -23,6 +23,7 @@ def get_tracking_info_by_order_id(input: str) -> str:
 
         order_id = match.group(0)
 
+        # Tenta primeiro por order_id
         query = supabase.table("sellercloud_orders") \
             .select("order_id, metadata") \
             .eq("order_id", order_id)
@@ -33,8 +34,22 @@ def get_tracking_info_by_order_id(input: str) -> str:
             query = query.eq("account_id", account_id)
 
         response = query.maybe_single().execute()
+        data = response.data if response else None
 
-        data = response.data
+        # Se não encontrou, tenta pelo order_source_order_id
+        if not data:
+            query = supabase.table("sellercloud_orders") \
+                .select("order_id, metadata") \
+                .eq("order_source_order_id", order_id)
+
+            if user_type == "client":
+                query = query.eq("channel_account_id", account_id)
+            else:
+                query = query.eq("account_id", account_id)
+
+            response = query.maybe_single().execute()
+            data = response.data if response else None
+
         if not data:
             return f"No order found with ID {order_id}."
 

@@ -14,6 +14,7 @@ from .summarize_order_status_by_client import summarize_order_status_by_client
 from .summarize_revenue_trend_by_client import summarize_revenue_trend_by_client
 from .summarize_sales_by_period import summarize_sales_by_period
 from .list_sales_by_period import list_sales_by_period
+from .get_shipping_details_by_order_id import get_shipping_details_by_order_id
 
 
 __all__ = [
@@ -33,4 +34,6 @@ __all__ = [
     "summarize_revenue_trend_by_client",
     "summarize_sales_by_period",
     "list_sales_by_period",
+    "list_order_products_by_id",
+    "get_shipping_details_by_order_id",
 ]

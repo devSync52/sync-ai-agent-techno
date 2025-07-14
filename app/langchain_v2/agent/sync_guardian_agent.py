@@ -1,5 +1,5 @@
 from langchain_openai import ChatOpenAI
-from langchain.agents import create_openai_functions_agent, AgentExecutor
+from langchain.agents import create_openai_functions_agent, AgentExecutor, Tool
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.runnables import Runnable
 
@@ -35,6 +35,10 @@ from app.langchain_v2.tools.orders import (
     summarize_sales_by_period,
     list_sales_by_period,
 )
+
+from app.langchain_v2.tools.orders.list_order_products_by_id import list_order_products_by_id
+
+from app.langchain_v2.tools.orders.get_shipping_details_by_order_id import get_shipping_details_by_order_id
 
 from app.langchain_v2.tools.replenishment import (
     estimate_lead_time_by_sku_and_destination,
@@ -87,7 +91,24 @@ async def createSyncGuardianAgent(
         list_products,
         list_available_warehouses,
         handle_unknown_request,
-        get_order_status_by_id,
+        Tool(
+            name="get_order_status_by_id",
+            func=get_order_status_by_id,
+            description="Gets the status of an order by its ID",
+            return_direct=True
+        ),
+        Tool(
+            name="get_shipping_details_by_order_id",
+            func=get_shipping_details_by_order_id,
+            description="Returns shipping and logistics info for an order, such as tracking number, carrier, delivery estimate, and warehouse.",
+            return_direct=True
+        ),
+        Tool(
+            name="list_order_products_by_id",
+            func=list_order_products_by_id,
+            description="Returns the list of products inside a specific order, such as SKUs, names, quantity and unit price. Use this tool when the user wants to see the items or products included in an order, not the status or sales summary.",
+            return_direct=True
+        ),
         get_sku_sales_by_period,
         get_tracking_info_by_order_id,
         summarize_orders_by_period_by_marketplace,
