@@ -27,13 +27,13 @@ def compare_revenue_by_period(input: str) -> str:
 
         current_query = f"""
             SELECT sum(total_amount) AS total_revenue
-            FROM view_all_orders
+            FROM view_all_orders_v2
             WHERE order_date >= '{start}' AND order_date <= '{end}'
             AND {account_filter}
         """
         previous_query = f"""
             SELECT sum(total_amount) AS total_revenue
-            FROM view_all_orders
+            FROM view_all_orders_v2
             WHERE order_date >= '{prev_start}' AND order_date <= '{prev_end}'
             AND {account_filter}
         """

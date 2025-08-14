@@ -40,7 +40,7 @@ def compare_marketplaces_by_period(input: str) -> dict:
         # 🚀 Query atual
         current_query = f"""
             SELECT marketplace_name, count(distinct order_id) as orders
-            FROM view_all_orders
+            FROM view_all_orders_v2
             WHERE order_date >= '{start}' AND order_date <= '{end}'
             {f"AND {'channel_id' if user_type == 'client' else 'account_id'} = '{account_id}'"}
             GROUP BY marketplace_name
@@ -49,7 +49,7 @@ def compare_marketplaces_by_period(input: str) -> dict:
         # 🚀 Query anterior
         previous_query = f"""
             SELECT marketplace_name, count(distinct order_id) as orders
-            FROM view_all_orders
+            FROM view_all_orders_v2
             WHERE order_date >= '{prev_start}' AND order_date <= '{prev_end}'
             {f"AND {'channel_id' if user_type == 'client' else 'account_id'} = '{account_id}'"}
             GROUP BY marketplace_name

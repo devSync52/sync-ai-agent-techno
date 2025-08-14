@@ -24,26 +24,26 @@ def compare_sales_by_period(input: str) -> str:
         if user_type == "client":
             current_query = f"""
                 SELECT count(distinct order_id) AS total_orders
-                FROM view_all_orders
+                FROM view_all_orders_v2
                 WHERE order_date >= '{start}' AND order_date <= '{end}'
                   AND channel_id = '{account_id}'
             """
             previous_query = f"""
                 SELECT count(distinct order_id) AS total_orders
-                FROM view_all_orders
+                FROM view_all_orders_v2
                 WHERE order_date >= '{prev_start}' AND order_date <= '{prev_end}'
                   AND channel_id = '{account_id}'
             """
         else:
             current_query = f"""
                 SELECT count(distinct order_id) AS total_orders
-                FROM view_all_orders
+                FROM view_all_orders_v2
                 WHERE order_date >= '{start}' AND order_date <= '{end}'
                   AND account_id = '{account_id}'
             """
             previous_query = f"""
                 SELECT count(distinct order_id) AS total_orders
-                FROM view_all_orders
+                FROM view_all_orders_v2
                 WHERE order_date >= '{prev_start}' AND order_date <= '{prev_end}'
                   AND account_id = '{account_id}'
             """
