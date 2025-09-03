@@ -1,5 +1,5 @@
 """
-EXAMPLES PROMPT – SynC Fulfillment AI Agent
+EXAMPLES PROMPT – SynC AI Agent
 
 Estas são perguntas reais organizadas por categoria para guiar o comportamento do agente.
 
