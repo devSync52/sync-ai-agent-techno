@@ -26,27 +26,53 @@ def summarize_orders_by_period(input_text: str, account_id: str = None, user_typ
         start_date, end_date = parse_period_input(input_text)
         print(f"[DEBUG] Parsed period: {start_date} to {end_date}")
 
-        if user_type == "owner":
-            query = (
-                supabase.from_("ai_orders_unified_4")
-                .select("order_status, grand_total")
-                .gte("order_date", start_date)
-                .lte("order_date", end_date)
-                .eq("account_id", account_id)
-            )
-        elif user_type == "client":
-            query = (
-                supabase.from_("ai_orders_unified_4")
-                .select("order_status, grand_total")
-                .gte("order_date", start_date)
-                .lte("order_date", end_date)
-                .eq("channel_account_id", account_id)
-            )
-        else:
+        if user_type not in ("owner", "client"):
             return f"❌ Unknown user type: {user_type}"
 
-        response = query.execute()
-        rows = response.data or []
+        # Build base filters once
+        base = (
+            supabase.from_("ai_orders_unified_4")
+            .gte("order_date", start_date)
+            .lte("order_date", end_date)
+        )
+        if user_type == "owner":
+            base = base.eq("account_id", account_id)
+        else:  # client
+            base = base.eq("channel_account_id", account_id)
+
+        # Exact count (ignores 1k page cap)
+        count_resp = (
+            base
+            .select("order_id", count="exact")
+            .range(0, 0)
+            .execute()
+        )
+        total_orders = getattr(count_resp, "count", None)
+
+        # Pagination to bypass PostgREST 1k page cap
+        page_size = 1000
+        start_idx = 0
+        all_rows = []
+
+        while True:
+            page_resp = (
+                base
+                .select("order_status, grand_total")
+                .order("order_date", desc=False)
+                .range(start_idx, start_idx + page_size - 1)
+                .execute()
+            )
+            page = page_resp.data or []
+            if not page:
+                break
+
+            all_rows.extend(page)
+            if len(page) < page_size:
+                break
+
+            start_idx += page_size
+
+        rows = all_rows
 
         if not rows:
             return f"No orders found between {start_date} and {end_date}."
@@ -69,7 +95,8 @@ def summarize_orders_by_period(input_text: str, account_id: str = None, user_typ
         ]
 
         # 🔥 Formatting
-        lines = [f"📦 **Order Overview from {start_date} to {end_date}:**\n"]
+        count_label = f" — {total_orders} order(s)" if 'total_orders' in locals() and total_orders is not None else ""
+        lines = [f"📦 **Order Overview from {start_date} to {end_date}{count_label}:**\n"]
         total_revenue_all = sum(float(row.get("total_revenue", 0)) for row in data)
         total_orders_all = sum(int(row.get("total_orders", 0)) for row in data)
 
