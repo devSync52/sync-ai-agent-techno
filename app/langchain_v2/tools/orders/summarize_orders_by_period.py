@@ -46,54 +46,30 @@ def summarize_orders_by_period(input_text: str, account_id: str = None, user_typ
         if user_type not in ("owner", "client"):
             return f"❌ Unknown user type: {user_type}"
 
-        # Build base filters once
-        base = (
-            supabase.from_("ai_orders_unified_6")
-            .gte("order_date", start_date)
-            .lte("order_date", end_date)
-        )
-        if user_type == "owner":
-            base = base.eq("account_id", account_id)
-        else:  # client
-            base = base.eq("channel_account_id", account_id)
+        # ✅ Prefer server-side aggregation via RPC (faster, avoids row limits/pagination)
+        rpc_payload = {
+            "p_account_id": account_id,
+            "p_user_type": user_type,
+            "p_start_date": str(start_date),
+            "p_end_date": str(end_date),
+        }
 
-        # Exact count (does not return rows; avoids 1k page cap)
-        count_resp = (
-            base
-            .select("order_id", count="exact", head=True)
-            .execute()
-        )
-        total_orders = count_resp.count or 0
+        resp = supabase.rpc("summarize_orders_by_period", rpc_payload).execute()
+        data = resp.data or []
 
-        # Pagination to bypass PostgREST 1k page cap
-        rows = _fetch_all_rows(
-            base
-            .select("order_status, grand_total")
-            .order("order_date", desc=False)
-        )
-
-        if not rows:
+        if not data:
             return f"No orders found between {start_date} and {end_date}."
 
-        # Aggregate results in Python
-        from collections import defaultdict
-        grouped = defaultdict(lambda: {"total_orders": 0, "total_revenue": 0.0})
-        for row in rows:
-            status = row.get("order_status", "Unknown")
-            grouped[status]["total_orders"] += 1
-            grouped[status]["total_revenue"] += float(row.get("grand_total") or 0)
-
-        data = [
-            {
-                "status": status,
-                "total_orders": stats["total_orders"],
-                "total_revenue": stats["total_revenue"],
-            }
-            for status, stats in grouped.items()
-        ]
+        # Normalize keys expected in formatting below
+        # Each row should have: status, total_orders, total_revenue
+        for row in data:
+            if "order_status" in row and "status" not in row:
+                row["status"] = row.get("order_status")
+            row["total_orders"] = int(row.get("total_orders") or 0)
+            row["total_revenue"] = float(row.get("total_revenue") or 0)
 
         # 🔥 Formatting
-        count_label = f" — {total_orders} order(s)" if 'total_orders' in locals() and total_orders is not None else ""
+        count_label = ""
         lines = [f"📦 **Order Overview from {start_date} to {end_date}{count_label}:**\n"]
         total_revenue_all = sum(float(row.get("total_revenue", 0)) for row in data)
         total_orders_all = sum(int(row.get("total_orders", 0)) for row in data)

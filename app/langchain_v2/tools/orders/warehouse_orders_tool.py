@@ -96,13 +96,16 @@ def warehouse_orders_tool(input: str) -> str:
 
         print(f"[DEBUG] Parsed period: {start_date} to {end_date}")
 
-        # ✅ Count query using PostgREST count (does not return rows; avoids the 1000-row cap)
+        # ✅ Count query using PostgREST count header (avoid fetching all rows)
+        # supabase-py v2 does not support `head=True` on `.select(...)`; instead, request an exact count
+        # and limit the returned payload to a single row.
         count_res = (
             supabase.table("ai_orders_by_warehouse")
-            .select("order_id", count="exact", head=True)
+            .select("order_id", count="exact")
             .eq("warehouse_name", warehouse_match.lower())
             .gte("order_date", start_date)
             .lte("order_date", end_date)
+            .limit(1)
             .execute()
         )
 

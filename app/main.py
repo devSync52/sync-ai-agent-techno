@@ -2,6 +2,8 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse, JSONResponse
+from dotenv import load_dotenv
+import os
 
 from app.langchain_v2.agent.sync_guardian_agent import createSyncGuardianAgent
 from app.langchain_v2.memory.session_memory import get_session_history_from_db
