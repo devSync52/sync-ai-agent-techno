@@ -4,6 +4,25 @@ from app.langchain_v2.utils.session_context import get_current_session_context
 import os
 from app.utils.supabase_client import get_supabase_client
 
+def _run_count_distinct_orders(supabase, sql: str) -> int:
+    """Execute a COUNT(DISTINCT ...) SQL via raw_sql RPC and return an integer safely.
+
+    Note: This tool is NOT impacted by PostgREST's 1000-row cap because it returns a single aggregated row.
+    """
+    base_sql = (sql or "").strip().rstrip(";")
+    res = supabase.rpc("raw_sql", {"sql": base_sql}).execute()
+    data = res.data or []
+    if not data:
+        return 0
+    # Accept either dict row or list-like row
+    row0 = data[0]
+    if isinstance(row0, dict):
+        return int(row0.get("total_orders") or 0)
+    try:
+        return int(row0[0] or 0)
+    except Exception:
+        return 0
+
 @tool
 def compare_sales_by_period(input: str) -> str:
     """
@@ -23,36 +42,33 @@ def compare_sales_by_period(input: str) -> str:
 
         if user_type == "client":
             current_query = f"""
-                SELECT count(distinct order_id) AS total_orders
-                FROM view_all_orders_v2
+                SELECT COALESCE(count(distinct order_id), 0) AS total_orders
+                FROM view_all_orders_v4
                 WHERE order_date >= '{start}' AND order_date <= '{end}'
                   AND channel_id = '{account_id}'
             """
             previous_query = f"""
-                SELECT count(distinct order_id) AS total_orders
-                FROM view_all_orders_v2
+                SELECT COALESCE(count(distinct order_id), 0) AS total_orders
+                FROM view_all_orders_v4
                 WHERE order_date >= '{prev_start}' AND order_date <= '{prev_end}'
                   AND channel_id = '{account_id}'
             """
         else:
             current_query = f"""
-                SELECT count(distinct order_id) AS total_orders
-                FROM view_all_orders_v2
+                SELECT COALESCE(count(distinct order_id), 0) AS total_orders
+                FROM view_all_orders_v4
                 WHERE order_date >= '{start}' AND order_date <= '{end}'
                   AND account_id = '{account_id}'
             """
             previous_query = f"""
-                SELECT count(distinct order_id) AS total_orders
-                FROM view_all_orders_v2
+                SELECT COALESCE(count(distinct order_id), 0) AS total_orders
+                FROM view_all_orders_v4
                 WHERE order_date >= '{prev_start}' AND order_date <= '{prev_end}'
                   AND account_id = '{account_id}'
             """
 
-        current_res = supabase.rpc("raw_sql", {"sql": current_query}).execute()
-        current = current_res.data[0]["total_orders"] or 0
-
-        previous_res = supabase.rpc("raw_sql", {"sql": previous_query}).execute()
-        previous = previous_res.data[0]["total_orders"] or 0
+        current = _run_count_distinct_orders(supabase, current_query)
+        previous = _run_count_distinct_orders(supabase, previous_query)
 
         diff = current - previous
         trend = "📈 increase" if diff > 0 else "📉 decrease" if diff < 0 else "➖ no change"

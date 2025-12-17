@@ -18,7 +18,7 @@ def get_top_selling_inventory(input: str) -> str:
 
         query = (
             supabase
-            .table("ai_stock_coverage_sellercloud_v3")
+            .table("ai_stock_coverage_sellercloud_v4")
             .select(
                 "sku, product_name, quantity_available, estimated_coverage_days, estimated_stockout_date, daily_sales_velocity, last_30d_sold"
             )

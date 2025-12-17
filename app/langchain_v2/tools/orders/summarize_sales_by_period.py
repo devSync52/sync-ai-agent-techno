@@ -2,6 +2,23 @@ from langchain.tools import tool
 from app.langchain_v2.utils.date_parser import parse_period_input
 from app.utils.supabase_client import get_supabase_client
 
+def _fetch_all_rows(query, batch_size: int = 1000):
+    """Fetches all rows from a Supabase query using pagination (Supabase default limit is 1000 rows)."""
+    all_rows = []
+    offset = 0
+
+    while True:
+        batch = query.range(offset, offset + batch_size - 1).execute()
+        data = batch.data or []
+        all_rows.extend(data)
+
+        if len(data) < batch_size:
+            break
+
+        offset += batch_size
+
+    return all_rows
+
 @tool
 def summarize_sales_by_period(input_text: str) -> str:
     """
@@ -31,7 +48,7 @@ Understands questions like:
 
         query = (
             supabase
-            .from_("ai_orders_unified_4")
+            .from_("ai_orders_unified_6")
             .select("grand_total")
             .gte("order_date", start_date)
             .lte("order_date", end_date)
@@ -43,8 +60,7 @@ Understands questions like:
         else:
             query = query.eq("account_id", account_id)
 
-        response = query.execute()
-        rows = response.data or []
+        rows = _fetch_all_rows(query)
 
         total_orders = len(rows)
         total_revenue = sum(order.get("grand_total", 0) for order in rows)

@@ -9,6 +9,18 @@ import os
 import re
 from app.utils.supabase_client import get_supabase_client
 
+def _run_compare_sku_rpc(supabase, payload: dict) -> dict:
+    """Execute compare_sku_sales_by_period_ RPC safely.
+
+    This RPC returns a single aggregated row and is NOT affected by PostgREST's 1000-row limit.
+    """
+    res = supabase.rpc("compare_sku_sales_by_period_", payload).execute()
+    data = res.data or []
+    if not data:
+        return {}
+    row0 = data[0]
+    return row0 if isinstance(row0, dict) else {}
+
 @tool
 def compare_sku_sales_by_period(input: str) -> str:
     """
@@ -45,20 +57,21 @@ def compare_sku_sales_by_period(input: str) -> str:
         print(f"[DEBUG] Comparing SKU: {sku} | {start} to {end} vs {prev_start} to {prev_end}")
 
         # 🚀 Executar function SQL
-        response = supabase.rpc("compare_sku_sales_by_period", {
-            "sku_input": sku,
-            "start_date": start,
-            "end_date": end,
-            "prev_start_date": prev_start,
-            "prev_end_date": prev_end,
-            "account_id": account_id,
-            "user_type": user_type
-        }).execute()
+        result = _run_compare_sku_rpc(
+            supabase,
+            {
+                "sku_input": sku,
+                "start_date": start,
+                "end_date": end,
+                "prev_start_date": prev_start,
+                "prev_end_date": prev_end,
+                "account_id": account_id,
+                "user_type": user_type,
+            },
+        )
 
-        if not response.data or len(response.data) == 0:
+        if not result:
             return f"❌ No data found for SKU `{sku}`."
-
-        result = response.data[0]
 
         curr_units = result.get("period_units") or 0
         curr_revenue = result.get("period_revenue") or 0

@@ -20,7 +20,7 @@ def get_products_at_risk(input: str = "30") -> str:
         account_id = session_ctx.get("account_id")
 
         table_name = (
-            "ai_stock_coverage_sellercloud"
+            "ai_stock_coverage_sellercloud_v4"
             if user_type in ["owner", "admin"]
             else "ai_stock_coverage_sellercloud"
         )

@@ -20,7 +20,7 @@ def get_stock_forecast_by_sku(sku: str) -> str:
     try:
         query = (
             supabase
-            .table("ai_stock_coverage_sellercloud_v2")
+            .table("ai_stock_coverage_sellercloud_v4")
             .select("*")
             .eq("sku", sku)
         )

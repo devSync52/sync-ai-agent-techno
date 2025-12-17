@@ -4,6 +4,23 @@ import os
 from app.utils.supabase_client import get_supabase_client
 from app.langchain_v2.utils.session_context import get_current_session_context
 
+def _fetch_all_rows(query, batch_size: int = 1000):
+    """Fetches all rows from a Supabase query using pagination (PostgREST default page size is 1000 rows)."""
+    all_rows = []
+    offset = 0
+
+    while True:
+        batch = query.range(offset, offset + batch_size - 1).execute()
+        data = batch.data or []
+        all_rows.extend(data)
+
+        if len(data) < batch_size:
+            break
+
+        offset += batch_size
+
+    return all_rows
+
 @tool
 def summarize_order_status_by_client(input: str = "") -> str:
     """
@@ -22,9 +39,7 @@ def summarize_order_status_by_client(input: str = "") -> str:
         else:
             query = query.eq("account_id", account_id)
         query = query.order("client_name")
-        response = query.execute()
-
-        data = response.data or []
+        data = _fetch_all_rows(query)
 
         if not data:
             return "No order data found."

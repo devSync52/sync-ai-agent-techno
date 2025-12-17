@@ -4,6 +4,27 @@ from app.langchain_v2.utils.date_parser import parse_period_input, get_previous_
 import os
 from app.utils.supabase_client import get_supabase_client
 
+def _fetch_all_rows_via_raw_sql(supabase, sql: str, batch_size: int = 1000):
+    """Fetch all rows from a raw_sql RPC by paginating with LIMIT/OFFSET."""
+    all_rows = []
+    offset = 0
+
+    # Ensure we don't end with a semicolon before appending LIMIT/OFFSET
+    base_sql = (sql or "").strip().rstrip(";")
+
+    while True:
+        paged_sql = f"{base_sql}\nLIMIT {batch_size} OFFSET {offset}"
+        res = supabase.rpc("raw_sql", {"sql": paged_sql}).execute()
+        batch = res.data or []
+        all_rows.extend(batch)
+
+        if len(batch) < batch_size:
+            break
+
+        offset += batch_size
+
+    return all_rows
+
 @tool
 def compare_marketplaces_by_period(input: str) -> dict:
     """
@@ -39,8 +60,8 @@ def compare_marketplaces_by_period(input: str) -> dict:
 
         # 🚀 Query atual
         current_query = f"""
-            SELECT marketplace_name, count(distinct order_id) as orders
-            FROM view_all_orders_v2
+            SELECT marketplace_name, COALESCE(count(distinct order_id), 0) as orders
+            FROM view_all_orders_v4
             WHERE order_date >= '{start}' AND order_date <= '{end}'
             {f"AND {'channel_id' if user_type == 'client' else 'account_id'} = '{account_id}'"}
             GROUP BY marketplace_name
@@ -48,18 +69,18 @@ def compare_marketplaces_by_period(input: str) -> dict:
 
         # 🚀 Query anterior
         previous_query = f"""
-            SELECT marketplace_name, count(distinct order_id) as orders
-            FROM view_all_orders_v2
+            SELECT marketplace_name, COALESCE(count(distinct order_id), 0) as orders
+            FROM view_all_orders_v4
             WHERE order_date >= '{prev_start}' AND order_date <= '{prev_end}'
             {f"AND {'channel_id' if user_type == 'client' else 'account_id'} = '{account_id}'"}
             GROUP BY marketplace_name
         """
 
-        current_res = supabase.rpc("raw_sql", {"sql": current_query}).execute().data or []
-        previous_res = supabase.rpc("raw_sql", {"sql": previous_query}).execute().data or []
+        current_res = _fetch_all_rows_via_raw_sql(supabase, current_query)
+        previous_res = _fetch_all_rows_via_raw_sql(supabase, previous_query)
 
-        current_map = {r["marketplace_name"]: r["orders"] for r in current_res}
-        previous_map = {r["marketplace_name"]: r["orders"] for r in previous_res}
+        current_map = {r.get("marketplace_name") or "(unknown)": r.get("orders") or 0 for r in current_res}
+        previous_map = {r.get("marketplace_name") or "(unknown)": r.get("orders") or 0 for r in previous_res}
 
         marketplaces = sorted(set(current_map.keys()) | set(previous_map.keys()))
 

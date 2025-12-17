@@ -6,6 +6,23 @@ from langchain.tools import tool
 
 from app.utils.supabase_client import get_supabase_client
 
+def _fetch_all_rows(query, batch_size: int = 1000):
+    """Fetch all rows from a Supabase query using pagination (PostgREST default page size is 1000 rows)."""
+    all_rows = []
+    offset = 0
+
+    while True:
+        batch = query.range(offset, offset + batch_size - 1).execute()
+        data = batch.data or []
+        all_rows.extend(data)
+
+        if len(data) < batch_size:
+            break
+
+        offset += batch_size
+
+    return all_rows
+
 # 🔗 Supabase client
 
 
@@ -31,18 +48,18 @@ def export_products(_: str = "Export products") -> str:
         user_type = context.user_type
 
         # 🧠 Filtragem condicional
-        query = supabase.table("ai_products_unified_v3").select("*").limit(1000)
+        query = supabase.table("ai_products_unified_v3").select("*")
         if user_type == "client":
             query = query.eq("channel_account_id", account_id)
         else:
             query = query.eq("account_id", account_id)
 
-        res = query.execute()
+        rows = _fetch_all_rows(query)
 
-        if not res.data:
+        if not rows:
             return "⚠️ No products found to export."
 
-        df = pd.DataFrame(res.data)
+        df = pd.DataFrame(rows)
 
         filename = f"products_export_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.xlsx"
         filepath = os.path.join(EXPORT_FOLDER, filename)

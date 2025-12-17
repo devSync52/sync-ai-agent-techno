@@ -1,7 +1,24 @@
 from langchain.tools import tool
 from app.langchain_v2.utils.date_parser import parse_period_input
-from supabase import create_client, Client
 from app.utils.supabase_client import get_supabase_client
+
+def _fetch_all_rows(query, batch_size: int = 1000):
+    """Fetches all rows from a Supabase query using pagination (Supabase default limit is 1000 rows)."""
+    all_rows = []
+    offset = 0
+
+    while True:
+        batch = query.range(offset, offset + batch_size - 1).execute()
+        data = batch.data or []
+        all_rows.extend(data)
+
+        # Stop when the returned batch is smaller than the page size
+        if len(data) < batch_size:
+            break
+
+        offset += batch_size
+
+    return all_rows
 
 @tool
 def warehouse_orders_tool(input: str) -> str:
@@ -19,14 +36,14 @@ def warehouse_orders_tool(input: str) -> str:
 
         # 🔍 Se pedir lista de warehouses
         if "list warehouse" in input_lower or "available warehouse" in input_lower:
-            response = (
+            base_q = (
                 supabase.table("ai_orders_by_warehouse")
                 .select("warehouse_name")
                 .neq("warehouse_name", None)
-                .execute()
             )
 
-            warehouses = sorted(set([row["warehouse_name"].title() for row in response.data]))
+            rows = _fetch_all_rows(base_q)
+            warehouses = sorted(set([row["warehouse_name"].title() for row in rows if row.get("warehouse_name")]))
 
             if not warehouses:
                 return "No warehouses found."
@@ -37,22 +54,30 @@ def warehouse_orders_tool(input: str) -> str:
             return "\n".join(lines)
 
         # 🔍 Se for consulta de quantidade
-        response = (
+        base_q = (
             supabase.table("ai_orders_by_warehouse")
             .select("warehouse_name")
             .neq("warehouse_name", None)
-            .execute()
         )
-        warehouse_list = sorted(set([row["warehouse_name"] for row in response.data]))
+        rows = _fetch_all_rows(base_q)
+        warehouse_list = sorted(set([row["warehouse_name"] for row in rows if row.get("warehouse_name")]))
 
         print(f"[DEBUG] Warehouses found: {warehouse_list}")
 
         warehouse_match = None
         for w in warehouse_list:
-            # Faz o fuzzy matching usando contains
-            if any(word.strip() in input_lower for word in w.lower().split()):
+            w_lower = w.lower().strip()
+            # Prefer phrase match for multi-word warehouse names
+            if w_lower and w_lower in input_lower:
                 warehouse_match = w
                 break
+
+        # Fallback: word-level match (previous behavior)
+        if not warehouse_match:
+            for w in warehouse_list:
+                if any(word.strip() and (word.strip() in input_lower) for word in w.lower().split()):
+                    warehouse_match = w
+                    break
 
         if not warehouse_match:
             return (
@@ -71,20 +96,17 @@ def warehouse_orders_tool(input: str) -> str:
 
         print(f"[DEBUG] Parsed period: {start_date} to {end_date}")
 
-        # 🔍 Query SQL
-        query = f"""
-            SELECT count(DISTINCT order_id) AS total_orders
-            FROM ai_orders_by_warehouse
-            WHERE warehouse_name = '{warehouse_match.lower()}'
-              AND order_date >= '{start_date}'
-              AND order_date <= '{end_date}'
-        """
+        # ✅ Count query using PostgREST count (does not return rows; avoids the 1000-row cap)
+        count_res = (
+            supabase.table("ai_orders_by_warehouse")
+            .select("order_id", count="exact", head=True)
+            .eq("warehouse_name", warehouse_match.lower())
+            .gte("order_date", start_date)
+            .lte("order_date", end_date)
+            .execute()
+        )
 
-        print(f"[DEBUG] Running SQL: {query}")
-
-        res = supabase.rpc("raw_sql", {"sql": query}).execute()
-
-        total = res.data[0]["total_orders"] if res.data else 0
+        total = count_res.count or 0
 
         return (
             f"🚚 **{total} orders** were shipped from **'{warehouse_match.title()}'** "

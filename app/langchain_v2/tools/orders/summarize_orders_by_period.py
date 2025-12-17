@@ -4,6 +4,23 @@ import os
 from app.utils.supabase_client import get_supabase_client
 from app.langchain_v2.utils.session_context import get_current_session_context
 
+def _fetch_all_rows(query, batch_size: int = 1000):
+    """Fetches all rows from a Supabase query using pagination (PostgREST default page size is 1000 rows)."""
+    all_rows = []
+    offset = 0
+
+    while True:
+        batch = query.range(offset, offset + batch_size - 1).execute()
+        data = batch.data or []
+        all_rows.extend(data)
+
+        if len(data) < batch_size:
+            break
+
+        offset += batch_size
+
+    return all_rows
+
 @tool
 def summarize_orders_by_period(input_text: str, account_id: str = None, user_type: str = None, user_id: str = None) -> str:
     """
@@ -31,7 +48,7 @@ def summarize_orders_by_period(input_text: str, account_id: str = None, user_typ
 
         # Build base filters once
         base = (
-            supabase.from_("ai_orders_unified_4")
+            supabase.from_("ai_orders_unified_6")
             .gte("order_date", start_date)
             .lte("order_date", end_date)
         )
@@ -40,39 +57,20 @@ def summarize_orders_by_period(input_text: str, account_id: str = None, user_typ
         else:  # client
             base = base.eq("channel_account_id", account_id)
 
-        # Exact count (ignores 1k page cap)
+        # Exact count (does not return rows; avoids 1k page cap)
         count_resp = (
             base
-            .select("order_id", count="exact")
-            .range(0, 0)
+            .select("order_id", count="exact", head=True)
             .execute()
         )
-        total_orders = getattr(count_resp, "count", None)
+        total_orders = count_resp.count or 0
 
         # Pagination to bypass PostgREST 1k page cap
-        page_size = 1000
-        start_idx = 0
-        all_rows = []
-
-        while True:
-            page_resp = (
-                base
-                .select("order_status, grand_total")
-                .order("order_date", desc=False)
-                .range(start_idx, start_idx + page_size - 1)
-                .execute()
-            )
-            page = page_resp.data or []
-            if not page:
-                break
-
-            all_rows.extend(page)
-            if len(page) < page_size:
-                break
-
-            start_idx += page_size
-
-        rows = all_rows
+        rows = _fetch_all_rows(
+            base
+            .select("order_status, grand_total")
+            .order("order_date", desc=False)
+        )
 
         if not rows:
             return f"No orders found between {start_date} and {end_date}."

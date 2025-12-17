@@ -5,6 +5,27 @@ import os
 from app.langchain_v2.utils.date_parser import parse_period_input
 from app.utils.supabase_client import get_supabase_client
 
+def _fetch_all_rows_via_raw_sql(supabase, sql: str, batch_size: int = 1000):
+    """Fetch all rows from a raw_sql RPC by paginating with LIMIT/OFFSET."""
+    all_rows = []
+    offset = 0
+
+    # Ensure we don't end with a semicolon before appending LIMIT/OFFSET
+    base_sql = sql.strip().rstrip(";")
+
+    while True:
+        paged_sql = f"{base_sql}\nLIMIT {batch_size} OFFSET {offset}"
+        res = supabase.rpc("raw_sql", {"sql": paged_sql}).execute()
+        batch = res.data or []
+        all_rows.extend(batch)
+
+        if len(batch) < batch_size:
+            break
+
+        offset += batch_size
+
+    return all_rows
+
 @tool
 def summarize_orders_by_period_by_marketplace(input_text: str) -> str:
     """
@@ -37,15 +58,14 @@ def summarize_orders_by_period_by_marketplace(input_text: str) -> str:
               sum(case when status_code = 2 then 1 else 0 end) as total_processing,
               sum(case when status_code = 3 then 1 else 0 end) as total_shipped,
               sum(case when status_code = -1 then 1 else 0 end) as total_cancelled
-            from public.ai_orders_unified_4
+            from public.ai_orders_unified_6
             where order_date between '{start_date}' and '{end_date}'
               and {filter_column} = '{account_id}'
             group by marketplace_name
             order by total_orders desc
         """
 
-        result = supabase.rpc("raw_sql", {"sql": query}).execute()
-        rows = result.data
+        rows = _fetch_all_rows_via_raw_sql(supabase, query)
 
         if not rows:
             return f"No orders found between {start_str} and {end_str}."

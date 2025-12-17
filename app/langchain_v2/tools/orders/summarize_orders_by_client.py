@@ -17,7 +17,7 @@ def summarize_orders_by_client(input: str = "") -> str:
     user_id = session_context.get("user_id")
     
     try:
-        query = supabase.table("ai_orders_summary_by_client_v2").select("*")
+        query = supabase.table("ai_orders_summary_by_client").select("*")
         if user_type == "client":
             query = query.eq("channel_account_id", account_id)
         else:

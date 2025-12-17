@@ -2,6 +2,23 @@ from langchain.tools import tool
 from app.langchain_v2.utils.date_parser import parse_period_input, get_previous_period
 from app.utils.supabase_client import get_supabase_client
 
+def _fetch_all_rows(query, batch_size: int = 1000):
+    """Fetches all rows from a Supabase query using pagination (Supabase default limit is 1000 rows)."""
+    all_rows = []
+    offset = 0
+
+    while True:
+        batch = query.range(offset, offset + batch_size - 1).execute()
+        data = batch.data or []
+        all_rows.extend(data)
+
+        if len(data) < batch_size:
+            break
+
+        offset += batch_size
+
+    return all_rows
+
 @tool
 def summarize_revenue_trend_by_client(input_text: str, client_name: str = None) -> str:
     """
@@ -38,8 +55,8 @@ def summarize_revenue_trend_by_client(input_text: str, client_name: str = None) 
             query_current = query_current.eq("client_name", client_name)
             query_previous = query_previous.eq("client_name", client_name)
 
-        current_data = query_current.execute().data or []
-        previous_data = query_previous.execute().data or []
+        current_data = _fetch_all_rows(query_current)
+        previous_data = _fetch_all_rows(query_previous)
 
         # 🔥 Agrupar e somar
         def aggregate(data):
