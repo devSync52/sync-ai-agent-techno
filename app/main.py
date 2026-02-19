@@ -7,6 +7,7 @@ import os
 
 from app.langchain_v2.agent.sync_guardian_agent import createSyncGuardianAgent
 from app.langchain_v2.memory.session_memory import get_session_history_from_db
+from app.langchain_v2.tools.extensiv import summarize_order_lifecycle_by_warehouse
 from app.utils.supabase_client import get_supabase_client, run_sql_query
 from app.langchain_v2.utils.session_context import set_current_session_context
 
@@ -14,10 +15,20 @@ from langchain_openai import ChatOpenAI
 from datetime import datetime, timezone
 import logging
 import re
+from typing import Optional, Tuple
+
+load_dotenv()
 
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("sync-ai-agent")
+
+VALID_USER_TYPES = {"owner", "client", "end_client"}
+OWNER_ROLES = {"admin", "staff-admin", "staff-user"}
+CLIENT_ROLES = {"client", "staff-client"}
+END_CLIENT_ROLES = {"customer"}
+VALID_INTEGRATION_SOURCES = {"sellercloud", "extensiv", "mixed", "unknown"}
+DEFAULT_COMPANY_NAME = "SynC Fulfillment"
 
 
 app = FastAPI()
@@ -35,12 +46,275 @@ def is_valid_uuid(val: str) -> bool:
     return bool(re.match(r"^[a-f0-9-]{36}$", val.strip(), re.I))
 
 
+def normalize_user_type(user_type: Optional[str]) -> Optional[str]:
+    normalized = (user_type or "").strip().lower()
+    return normalized if normalized in VALID_USER_TYPES else None
+
+
+def map_role_to_user_type(role: Optional[str]) -> Optional[str]:
+    normalized_role = (role or "").strip().lower()
+    if normalized_role in OWNER_ROLES:
+        return "owner"
+    if normalized_role in CLIENT_ROLES:
+        return "client"
+    if normalized_role in END_CLIENT_ROLES:
+        return "end_client"
+    return None
+
+
+def normalize_integration_source(source: Optional[str]) -> str:
+    normalized = (source or "").strip().lower()
+    return normalized if normalized in VALID_INTEGRATION_SOURCES else "unknown"
+
+
+def resolve_parent_account_id(account_id: Optional[str]) -> Optional[str]:
+    if not account_id:
+        return None
+
+    try:
+        supabase = get_supabase_client()
+        response = (
+            supabase.table("accounts")
+            .select("id,parent_account_id")
+            .eq("id", account_id)
+            .limit(1)
+            .execute()
+        )
+        row = (response.data or [None])[0]
+        if not row:
+            return account_id
+
+        return row.get("parent_account_id") or row.get("id") or account_id
+    except Exception as e:
+        logger.warning(f"[Integrations] Could not resolve parent account for account_id={account_id}: {e}")
+        return account_id
+
+
+def resolve_integration_source(account_id: Optional[str]) -> str:
+    parent_account_id = resolve_parent_account_id(account_id)
+    if not parent_account_id:
+        return "unknown"
+
+    try:
+        supabase = get_supabase_client()
+        response = (
+            supabase.table("account_integrations")
+            .select("type,status")
+            .eq("account_id", parent_account_id)
+            .execute()
+        )
+        rows = response.data or []
+
+        integration_types = []
+        for row in rows:
+            status = str(row.get("status") or "").strip().lower()
+            if status in {"inactive", "disabled"}:
+                continue
+            integration_type = str(row.get("type") or "").strip().lower()
+            if integration_type:
+                integration_types.append(integration_type)
+
+        if not integration_types:
+            return "unknown"
+
+        has_extensiv = any(t == "extensiv" for t in integration_types)
+        has_sellercloud = any(t == "sellercloud" for t in integration_types)
+
+        if has_extensiv and has_sellercloud:
+            return "mixed"
+        if has_extensiv:
+            return "extensiv"
+        if has_sellercloud:
+            return "sellercloud"
+        return "unknown"
+    except Exception as e:
+        logger.warning(f"[Integrations] Could not resolve integration source for parent_account_id={parent_account_id}: {e}")
+        return "unknown"
+
+
+def resolve_company_name(account_id: Optional[str]) -> str:
+    parent_account_id = resolve_parent_account_id(account_id)
+    if not parent_account_id:
+        return DEFAULT_COMPANY_NAME
+
+    try:
+        supabase = get_supabase_client()
+        response = (
+            supabase.table("accounts")
+            .select("name")
+            .eq("id", parent_account_id)
+            .limit(1)
+            .execute()
+        )
+        row = (response.data or [None])[0]
+        company_name = str((row or {}).get("name") or "").strip()
+        return company_name or DEFAULT_COMPANY_NAME
+    except Exception as e:
+        logger.warning(f"[Company] Could not resolve parent company name for account_id={account_id}: {e}")
+        return DEFAULT_COMPANY_NAME
+
+
+def resolve_user_context(user_id: str, account_id: str, request_user_type: Optional[str]) -> Tuple[str, str, str, str]:
+    """
+    Resolve user_type/account_id with DB as source of truth when possible.
+    Falls back to request payload if user lookup is unavailable.
+    """
+    payload_user_type = normalize_user_type(request_user_type)
+    resolved_user_type = payload_user_type or "client"
+    resolved_account_id = account_id
+
+    try:
+        supabase = get_supabase_client()
+        response = (
+            supabase.table("users")
+            .select("role, account_id")
+            .eq("id", user_id)
+            .limit(1)
+            .execute()
+        )
+        row = (response.data or [None])[0]
+        if row:
+            db_user_type = map_role_to_user_type(row.get("role"))
+            db_account_id = row.get("account_id")
+
+            if db_user_type:
+                resolved_user_type = db_user_type
+                if payload_user_type and payload_user_type != db_user_type:
+                    logger.warning(
+                        f"[Auth] user_type payload mismatch for user_id={user_id}: payload={payload_user_type}, db={db_user_type}. Using db value."
+                    )
+            else:
+                resolved_user_type = "client"
+                logger.warning(
+                    f"[Auth] Unknown role for user_id={user_id}. Using restricted user_type=client."
+                )
+
+            if db_account_id:
+                resolved_account_id = db_account_id
+                if account_id and account_id != db_account_id:
+                    logger.warning(
+                        f"[Auth] account_id payload mismatch for user_id={user_id}: payload={account_id}, db={db_account_id}. Using db value."
+                    )
+    except Exception as e:
+        logger.warning(f"[Auth] Could not resolve role/account from users table. Using payload fallback. Error: {e}")
+
+    resolved_integration_source = normalize_integration_source(
+        resolve_integration_source(resolved_account_id)
+    )
+    resolved_company_name = resolve_company_name(resolved_account_id)
+
+    return resolved_user_type, resolved_account_id, resolved_integration_source, resolved_company_name
+
+
+def should_force_extensiv_lifecycle_summary(question: str, integration_source: str) -> bool:
+    """
+    Deterministic routing to avoid fabricated lifecycle summaries.
+    Applies only to Extensiv contexts.
+    """
+    if normalize_integration_source(integration_source) != "extensiv":
+        return False
+
+    lowered = (question or "").strip().lower()
+    if not lowered:
+        return False
+
+    lifecycle_keywords = [
+        "lifecycle",
+        "order lifecycle",
+        "ciclo de pedidos",
+        "ciclo do pedido",
+    ]
+    warehouse_keywords = [
+        "warehouse",
+        "warehouses",
+        "facility",
+        "facilities",
+        "armazem",
+        "armazém",
+        "deposito",
+        "depósito",
+    ]
+    summary_keywords = [
+        "summary",
+        "summarize",
+        "resuma",
+        "resumir",
+        "resumo",
+        "mostrar",
+        "mostre",
+        "show",
+    ]
+
+    has_lifecycle = any(keyword in lowered for keyword in lifecycle_keywords)
+    has_warehouse = any(keyword in lowered for keyword in warehouse_keywords)
+    has_summary_intent = any(keyword in lowered for keyword in summary_keywords)
+
+    return has_lifecycle and has_warehouse and has_summary_intent
+
+
+def resolve_forced_extensiv_response(question: str, integration_source: str) -> Optional[str]:
+    if should_force_extensiv_lifecycle_summary(question, integration_source):
+        logger.info("[Router] Forced tool path: summarize_order_lifecycle_by_warehouse")
+        return summarize_order_lifecycle_by_warehouse(question)
+
+    return None
+
+
+def persist_chat_logs(
+    *,
+    question: str,
+    final_answer: str,
+    session_id: str,
+    user_id: str,
+    account_id: str,
+    user_type: str,
+    integration_source: str,
+    company_name: str,
+    model_name: str,
+) -> None:
+    timestamp = datetime.now(timezone.utc).isoformat()
+
+    if question.strip():
+        supabase = get_supabase_client()
+        supabase.table("ai_chat_logs").insert({
+            "session_id": session_id,
+            "user_id": user_id,
+            "account_id": account_id,
+            "role": "user",
+            "question": question,
+            "timestamp": timestamp,
+            "metadata": {
+                "model": model_name,
+                "user_type": user_type,
+                "integration_source": integration_source,
+                "company_name": company_name,
+            }
+        }).execute()
+
+    if final_answer.strip():
+        supabase = get_supabase_client()
+        supabase.table("ai_chat_logs").insert({
+            "session_id": session_id,
+            "user_id": user_id,
+            "account_id": account_id,
+            "role": "ai",
+            "answer": final_answer.strip(),
+            "timestamp": timestamp,
+            "metadata": {
+                "model": model_name,
+                "user_type": user_type,
+                "integration_source": integration_source,
+                "company_name": company_name,
+            }
+        }).execute()
+
+
 class AgentRequest(BaseModel):
     question: str
     account_id: str
     user_id: str
     session_id: str
-    user_type: str
+    user_type: Optional[str] = None
 
 
 @app.post("/chat")
@@ -50,11 +324,55 @@ async def chat_with_agent(request: AgentRequest):
 
     logger.info(f"[Chat] Session: {request.session_id} | Question: {request.question}")
 
-    logger.info(f"🔍 Dados da sessão recebidos:")
-    logger.info(f"  - account_id: {request.account_id}")
+    resolved_user_type, resolved_account_id, resolved_integration_source, resolved_company_name = resolve_user_context(
+        user_id=request.user_id,
+        account_id=request.account_id,
+        request_user_type=request.user_type,
+    )
+
+    logger.info("🔍 Dados da sessão (resolvidos):")
+    logger.info(f"  - account_id: {resolved_account_id}")
     logger.info(f"  - user_id: {request.user_id}")
     logger.info(f"  - session_id: {request.session_id}")
-    logger.info(f"  - user_type: {request.user_type}")
+    logger.info(f"  - user_type: {resolved_user_type}")
+    logger.info(f"  - integration_source: {resolved_integration_source}")
+    logger.info(f"  - company_name: {resolved_company_name}")
+
+    # Session context is required by Extensiv tools.
+    set_current_session_context({
+        "account_id": resolved_account_id,
+        "user_id": request.user_id,
+        "session_id": request.session_id,
+        "user_type": resolved_user_type,
+        "integration_source": resolved_integration_source,
+        "company_name": resolved_company_name,
+    })
+
+    forced_answer = resolve_forced_extensiv_response(
+        question=request.question,
+        integration_source=resolved_integration_source,
+    )
+    if forced_answer is not None:
+        async def forced_stream_response():
+            final_answer = forced_answer
+            yield final_answer
+
+            try:
+                persist_chat_logs(
+                    question=request.question,
+                    final_answer=final_answer,
+                    session_id=request.session_id,
+                    user_id=request.user_id,
+                    account_id=resolved_account_id,
+                    user_type=resolved_user_type,
+                    integration_source=resolved_integration_source,
+                    company_name=resolved_company_name,
+                    model_name="deterministic_tool_router",
+                )
+            except Exception as e:
+                logger.error(f"❌ Error saving forced-route logs to Supabase: {e}")
+
+        return StreamingResponse(forced_stream_response(), media_type="text/plain")
 
     try:
         model = ChatOpenAI(
@@ -63,20 +381,14 @@ async def chat_with_agent(request: AgentRequest):
             streaming=True,
         )
 
-        # 📌 Armazena o contexto da sessão para tools futuras
-        set_current_session_context({
-            "account_id": request.account_id,
-            "user_id": request.user_id,
-            "session_id": request.session_id,
-            "user_type": request.user_type
-        })
-
         agent, chat_history = await createSyncGuardianAgent(
             model=model,
-            account_id=request.account_id,
+            account_id=resolved_account_id,
             user_id=request.user_id,
             session_id=request.session_id,
-            user_type=request.user_type,
+            user_type=resolved_user_type,
+            integration_source=resolved_integration_source,
+            company_name=resolved_company_name,
         )
 
     except Exception as e:
@@ -86,20 +398,24 @@ async def chat_with_agent(request: AgentRequest):
     async def stream_response():
         logger.info(f"🚀 Iniciando stream com dados:")
         logger.info(f"  - question: {request.question}")
-        logger.info(f"  - account_id: {request.account_id}")
+        logger.info(f"  - account_id: {resolved_account_id}")
         logger.info(f"  - user_id: {request.user_id}")
         logger.info(f"  - session_id: {request.session_id}")
-        logger.info(f"  - user_type: {request.user_type}")
+        logger.info(f"  - user_type: {resolved_user_type}")
+        logger.info(f"  - integration_source: {resolved_integration_source}")
+        logger.info(f"  - company_name: {resolved_company_name}")
 
         final_answer = ""
         try:
             agent_input = {
                 "input": request.question,
                 "chat_history": chat_history,
-                "account_id": request.account_id,
+                "account_id": resolved_account_id,
                 "user_id": request.user_id,
                 "session_id": request.session_id,
-                "user_type": request.user_type,
+                "user_type": resolved_user_type,
+                "integration_source": resolved_integration_source,
+                "company_name": resolved_company_name,
             }
             async for chunk in agent.astream(agent_input):
                 if isinstance(chunk, str):
@@ -114,38 +430,17 @@ async def chat_with_agent(request: AgentRequest):
             yield final_answer
 
         try:
-            timestamp = datetime.now(timezone.utc).isoformat()
-
-            if request.question.strip():
-                supabase = get_supabase_client()
-                supabase.table("ai_chat_logs").insert({
-                    "session_id": request.session_id,
-                    "user_id": request.user_id,
-                    "account_id": request.account_id,
-                    "role": "user",
-                    "question": request.question,
-                    "timestamp": timestamp,
-                    "metadata": {
-                        "model": "gpt-3.5-turbo-0125",
-                        "user_type": request.user_type
-                    }
-                }).execute()
-
-            if final_answer.strip():
-                supabase = get_supabase_client()
-                supabase.table("ai_chat_logs").insert({
-                    "session_id": request.session_id,
-                    "user_id": request.user_id,
-                    "account_id": request.account_id,
-                    "role": "ai",
-                    "answer": final_answer.strip(),
-                    "timestamp": timestamp,
-                    "metadata": {
-                        "model": "gpt-3.5-turbo-0125",
-                        "user_type": request.user_type
-                    }
-                }).execute()
-
+            persist_chat_logs(
+                question=request.question,
+                final_answer=final_answer,
+                session_id=request.session_id,
+                user_id=request.user_id,
+                account_id=resolved_account_id,
+                user_type=resolved_user_type,
+                integration_source=resolved_integration_source,
+                company_name=resolved_company_name,
+                model_name="gpt-3.5-turbo-0125",
+            )
         except Exception as e:
             logger.error(f"❌ Error saving logs to Supabase: {e}")
 
