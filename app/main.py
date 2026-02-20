@@ -15,6 +15,7 @@ from langchain_openai import ChatOpenAI
 from datetime import datetime, timezone
 import logging
 import re
+import unicodedata
 from typing import Optional, Tuple
 
 load_dotenv()
@@ -252,10 +253,94 @@ def should_force_extensiv_lifecycle_summary(question: str, integration_source: s
     return has_lifecycle and has_warehouse and has_summary_intent
 
 
-def resolve_forced_extensiv_response(question: str, integration_source: str) -> Optional[str]:
+def _normalize_question_text(question: str) -> str:
+    lowered = (question or "").strip().lower()
+    normalized = unicodedata.normalize("NFD", lowered)
+    return "".join(ch for ch in normalized if unicodedata.category(ch) != "Mn")
+
+
+def is_capability_question(question: str) -> bool:
+    normalized = _normalize_question_text(question)
+    if not normalized:
+        return False
+
+    patterns = [
+        "what can you do",
+        "what can you do for me",
+        "how can you help",
+        "what are your capabilities",
+        "o que voce pode fazer",
+        "o que pode fazer por mim",
+        "como voce pode me ajudar",
+        "como pode me ajudar",
+        "no que voce pode me ajudar",
+        "que puedes hacer",
+        "que puedes hacer por mi",
+        "como puedes ayudarme",
+    ]
+    return any(pattern in normalized for pattern in patterns)
+
+
+def _detect_question_language(question: str) -> str:
+    normalized = _normalize_question_text(question)
+    if any(token in normalized for token in [" o que ", " voce ", " ajudar", " por mim", "ola", "olá"]):
+        return "pt"
+    if any(token in normalized for token in [" que ", " ayudar", " por mi", "hola", "puedes"]):
+        return "es"
+    return "en"
+
+
+def build_non_extensiv_capability_response(question: str, integration_source: str, company_name: str) -> str:
+    language = _detect_question_language(question)
+    company = (company_name or DEFAULT_COMPANY_NAME).strip() or DEFAULT_COMPANY_NAME
+
+    if language == "pt":
+        return (
+            f"Claro. Sou sua assistente na {company}.\n"
+            "\n"
+            "Posso ajudar agora com:\n"
+            "- status de pedidos por ID\n"
+            "- tracking e detalhes de envio\n"
+            "- itens/SKUs de um pedido\n"
+            "- resumos de pedidos e vendas por período\n"
+            "- comparativos por período, marketplace e SKU\n"
+            "- consultas de inventário por SKU e produtos em risco"
+        )
+
+    if language == "es":
+        return (
+            f"Claro. Soy tu asistente en {company}.\n"
+            "\n"
+            "Ahora puedo ayudarte con:\n"
+            "- estado de pedidos por ID\n"
+            "- tracking y detalles de envío\n"
+            "- artículos/SKUs de un pedido\n"
+            "- resúmenes de pedidos y ventas por período\n"
+            "- comparativos por período, marketplace y SKU\n"
+            "- consultas de inventario por SKU y productos en riesgo"
+        )
+
+    return (
+        f"Sure. I am your assistant at {company}.\n"
+        "\n"
+        "I can help right now with:\n"
+        "- order status by ID\n"
+        "- tracking and shipping details\n"
+        "- order items/SKUs\n"
+        "- order and sales summaries by period\n"
+        "- comparisons by period, marketplace, and SKU\n"
+        "- SKU inventory checks and products at risk"
+    )
+
+
+def resolve_forced_response(question: str, integration_source: str, company_name: str) -> Optional[str]:
     if should_force_extensiv_lifecycle_summary(question, integration_source):
         logger.info("[Router] Forced tool path: summarize_order_lifecycle_by_warehouse")
         return summarize_order_lifecycle_by_warehouse(question)
+
+    if normalize_integration_source(integration_source) != "extensiv" and is_capability_question(question):
+        logger.info("[Router] Forced non-extensiv capability response")
+        return build_non_extensiv_capability_response(question, integration_source, company_name)
 
     return None
 
@@ -348,9 +433,10 @@ async def chat_with_agent(request: AgentRequest):
         "company_name": resolved_company_name,
     })
 
-    forced_answer = resolve_forced_extensiv_response(
+    forced_answer = resolve_forced_response(
         question=request.question,
         integration_source=resolved_integration_source,
+        company_name=resolved_company_name,
     )
     if forced_answer is not None:
         async def forced_stream_response():

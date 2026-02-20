@@ -76,6 +76,15 @@ VALID_USER_TYPES = {"owner", "client", "end_client"}
 VALID_INTEGRATION_SOURCES = {"sellercloud", "extensiv", "mixed", "unknown"}
 DEFAULT_COMPANY_NAME = "SynC Fulfillment"
 
+NON_EXTENSIV_CAPABILITY_OVERRIDE = """
+--- CAPABILITY QUESTIONS SCOPE OVERRIDE ---
+The "we are just starting our relationship" capability message is ONLY for Extensiv users.
+If integration_source is sellercloud, mixed, or unknown:
+- Do NOT use the onboarding-style disclaimer from the capability section.
+- Answer capability questions in a concise, professional way.
+- List what is currently supported by the enabled tools for that user.
+"""
+
 
 def normalize_user_type(user_type: str) -> str:
     normalized = (user_type or "").strip().lower()
@@ -313,6 +322,8 @@ async def createSyncGuardianAgent(
 
     # 🔥 Prompt estruturado
     dynamic_system_prompt = (SYSTEM_PROMPT or "").replace(DEFAULT_COMPANY_NAME, resolved_company_name)
+    if resolved_integration_source != "extensiv":
+        dynamic_system_prompt = f"{dynamic_system_prompt}\n\n{NON_EXTENSIV_CAPABILITY_OVERRIDE}"
     dynamic_examples_prompt = (EXAMPLES_PROMPT or "").replace(DEFAULT_COMPANY_NAME, resolved_company_name)
 
     prompt = ChatPromptTemplate.from_messages(
