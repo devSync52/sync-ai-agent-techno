@@ -1,4 +1,3 @@
-from datetime import datetime
 from langchain.tools import tool
 import os
 
@@ -47,8 +46,6 @@ def summarize_orders_by_period_by_marketplace(input_text: str) -> str:
         filter_column = "account_id" if user_type == "owner" else "channel_account_id"
 
         start_str, end_str = parse_period_input(input_text)
-        start_date = datetime.fromisoformat(start_str)
-        end_date = datetime.fromisoformat(end_str)
 
         query = f"""
             select
@@ -59,7 +56,8 @@ def summarize_orders_by_period_by_marketplace(input_text: str) -> str:
               sum(case when status_code = 3 then 1 else 0 end) as total_shipped,
               sum(case when status_code = -1 then 1 else 0 end) as total_cancelled
             from public.ai_orders_unified_6
-            where order_date between '{start_date}' and '{end_date}'
+            where order_date >= date '{start_str}'
+              and order_date < (date '{end_str}' + interval '1 day')
               and {filter_column} = '{account_id}'
             group by marketplace_name
             order by total_orders desc

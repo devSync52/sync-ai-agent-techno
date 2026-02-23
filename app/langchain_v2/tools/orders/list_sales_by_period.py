@@ -1,6 +1,7 @@
 from langchain.tools import tool
 from app.langchain_v2.utils.date_parser import parse_period_input
 from app.langchain_v2.utils.session_context import get_current_session_context
+from datetime import date, timedelta
 import os
 from app.utils.supabase_client import get_supabase_client
 
@@ -32,6 +33,9 @@ def list_sales_by_period(input_text: str) -> str:
     
     try:
         start_date, end_date = parse_period_input(input_text)
+        start_day = date.fromisoformat(str(start_date))
+        end_day = date.fromisoformat(str(end_date))
+        end_exclusive = (end_day + timedelta(days=1)).isoformat()
         session_context = get_current_session_context()
         account_id = session_context.get("account_id")
         user_type = session_context.get("user_type")
@@ -39,22 +43,14 @@ def list_sales_by_period(input_text: str) -> str:
 
         print(f"[DEBUG] Parsed period: {start_date} to {end_date}")
 
-        # 🔥 Lógica sniper — se for um único dia, usa EQ
-        if start_date == end_date:
-            query = (
-                supabase.table("ai_orders_unified_6")
-                .select("order_id, order_date, client_name, grand_total")
-                .eq("order_date", start_date)
-                .order("order_date", desc=False)
-            )
-        else:
-            query = (
-                supabase.table("ai_orders_unified_6")
-                .select("order_id, order_date, client_name, grand_total")
-                .gte("order_date", start_date)
-                .lte("order_date", end_date)
-                .order("order_date", desc=False)
-            )
+        # Use half-open date range to include the full end day when order_date is timestamp.
+        query = (
+            supabase.table("ai_orders_unified_6")
+            .select("order_id, order_date, client_name, grand_total")
+            .gte("order_date", start_day.isoformat())
+            .lt("order_date", end_exclusive)
+            .order("order_date", desc=False)
+        )
 
         # 🎯 Filtra por escopo de usuário
         if user_type == "client":

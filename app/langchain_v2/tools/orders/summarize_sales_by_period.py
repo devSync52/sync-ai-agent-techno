@@ -38,6 +38,7 @@ def _fetch_all_rows(build_query, batch_size: int = 1000):
 def summarize_sales_by_period(input_text: str) -> str:
     """
 Summarizes total orders and total revenue for a given period.
+Counts only finalized sales (status_code IN (3,4)).
 Understands questions like:
 - 'How many sales yesterday?'
 - 'How many sales this week?'
@@ -79,10 +80,14 @@ Understands questions like:
         total_revenue = float(row.get("total_revenue") or 0)
 
         if total_orders == 0:
-            return f"❌ No sales found between {start_date} and {end_date}."
+            return (
+                f"❌ No finalized sales found between {start_date} and {end_date} "
+                f"(status_code IN (3,4))."
+            )
 
         return (
             f"📊 **Sales Summary from {start_date} to {end_date}:**\n"
+            f"- Scope: status_code IN (3,4)\n"
             f"- Total Orders: {total_orders}\n"
             f"- Total Revenue: ${total_revenue:,.2f}"
         )

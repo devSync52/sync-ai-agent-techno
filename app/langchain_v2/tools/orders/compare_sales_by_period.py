@@ -44,26 +44,26 @@ def compare_sales_by_period(input: str) -> str:
             current_query = f"""
                 SELECT COALESCE(count(distinct order_id), 0) AS total_orders
                 FROM view_all_orders_v4
-                WHERE order_date >= '{start}' AND order_date <= '{end}'
+                WHERE order_date >= date '{start}' AND order_date < (date '{end}' + interval '1 day')
                   AND channel_id = '{account_id}'
             """
             previous_query = f"""
                 SELECT COALESCE(count(distinct order_id), 0) AS total_orders
                 FROM view_all_orders_v4
-                WHERE order_date >= '{prev_start}' AND order_date <= '{prev_end}'
+                WHERE order_date >= date '{prev_start}' AND order_date < (date '{prev_end}' + interval '1 day')
                   AND channel_id = '{account_id}'
             """
         else:
             current_query = f"""
                 SELECT COALESCE(count(distinct order_id), 0) AS total_orders
                 FROM view_all_orders_v4
-                WHERE order_date >= '{start}' AND order_date <= '{end}'
+                WHERE order_date >= date '{start}' AND order_date < (date '{end}' + interval '1 day')
                   AND account_id = '{account_id}'
             """
             previous_query = f"""
                 SELECT COALESCE(count(distinct order_id), 0) AS total_orders
                 FROM view_all_orders_v4
-                WHERE order_date >= '{prev_start}' AND order_date <= '{prev_end}'
+                WHERE order_date >= date '{prev_start}' AND order_date < (date '{prev_end}' + interval '1 day')
                   AND account_id = '{account_id}'
             """
 

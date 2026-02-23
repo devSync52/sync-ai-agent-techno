@@ -1,5 +1,6 @@
 from langchain.tools import tool
 from app.langchain_v2.utils.date_parser import parse_period_input
+from datetime import date, timedelta
 from app.utils.supabase_client import get_supabase_client
 
 def _fetch_all_rows(query, batch_size: int = 1000):
@@ -93,6 +94,8 @@ def warehouse_orders_tool(input: str) -> str:
         cleaned_input = input_lower.strip()
 
         start_date, end_date = parse_period_input(cleaned_input)
+        start_iso = str(start_date)
+        end_exclusive = (date.fromisoformat(str(end_date)) + timedelta(days=1)).isoformat()
 
         print(f"[DEBUG] Parsed period: {start_date} to {end_date}")
 
@@ -103,8 +106,8 @@ def warehouse_orders_tool(input: str) -> str:
             supabase.table("ai_orders_by_warehouse")
             .select("order_id", count="exact")
             .eq("warehouse_name", warehouse_match.lower())
-            .gte("order_date", start_date)
-            .lte("order_date", end_date)
+            .gte("order_date", start_iso)
+            .lt("order_date", end_exclusive)
             .limit(1)
             .execute()
         )

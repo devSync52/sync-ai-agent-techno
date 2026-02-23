@@ -46,13 +46,13 @@ def compare_revenue_by_period(input: str) -> str:
         current_query = f"""
             SELECT COALESCE(sum(total_amount), 0) AS total_revenue
             FROM view_all_orders_v4
-            WHERE order_date >= '{start}' AND order_date <= '{end}'
+            WHERE order_date >= date '{start}' AND order_date < (date '{end}' + interval '1 day')
             AND {account_filter}
         """
         previous_query = f"""
             SELECT COALESCE(sum(total_amount), 0) AS total_revenue
             FROM view_all_orders_v4
-            WHERE order_date >= '{prev_start}' AND order_date <= '{prev_end}'
+            WHERE order_date >= date '{prev_start}' AND order_date < (date '{prev_end}' + interval '1 day')
             AND {account_filter}
         """
 

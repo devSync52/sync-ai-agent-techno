@@ -62,7 +62,7 @@ def compare_marketplaces_by_period(input: str) -> dict:
         current_query = f"""
             SELECT marketplace_name, COALESCE(count(distinct order_id), 0) as orders
             FROM view_all_orders_v4
-            WHERE order_date >= '{start}' AND order_date <= '{end}'
+            WHERE order_date >= date '{start}' AND order_date < (date '{end}' + interval '1 day')
             {f"AND {'channel_id' if user_type == 'client' else 'account_id'} = '{account_id}'"}
             GROUP BY marketplace_name
         """
@@ -71,7 +71,7 @@ def compare_marketplaces_by_period(input: str) -> dict:
         previous_query = f"""
             SELECT marketplace_name, COALESCE(count(distinct order_id), 0) as orders
             FROM view_all_orders_v4
-            WHERE order_date >= '{prev_start}' AND order_date <= '{prev_end}'
+            WHERE order_date >= date '{prev_start}' AND order_date < (date '{prev_end}' + interval '1 day')
             {f"AND {'channel_id' if user_type == 'client' else 'account_id'} = '{account_id}'"}
             GROUP BY marketplace_name
         """
